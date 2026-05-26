@@ -72,7 +72,16 @@ func (a *App) buildBookmarksList() {
 	}
 }
 
+// addBookmark shows a note input dialog, then saves.
 func (a *App) addBookmark() {
+	if a.book == nil {
+		return
+	}
+	a.showBookmarkNoteInput()
+}
+
+// doAddBookmark actually saves the bookmark (called after note input).
+func (a *App) doAddBookmark(note string) {
 	if a.book == nil {
 		return
 	}
@@ -81,7 +90,7 @@ func (a *App) addBookmark() {
 		ID:           fmt.Sprintf("bm-%d", time.Now().UnixNano()),
 		SectionIndex: a.sectionIdx,
 		LinePos:      a.scrollPos,
-		Note:         "",
+		Note:         note,
 		CreatedAt:    time.Now(),
 	})
 	a.store.SaveBookmarks(a.bookPath, bms)
@@ -94,9 +103,29 @@ func (a *App) deleteBookmark() {
 	if idx >= len(bms) {
 		return
 	}
-	bms = append(bms[:idx], bms[idx+1:]...)
-	a.store.SaveBookmarks(a.bookPath, bms)
-	a.buildBookmarksList()
+	// Confirm deletion — use a modal
+	a.showDeleteConfirm(fmt.Sprintf("删除书签 \"%s\"?", bms[idx].Note), func() {
+		bms = append(bms[:idx], bms[idx+1:]...)
+		a.store.SaveBookmarks(a.bookPath, bms)
+		a.buildBookmarksList()
+	})
+}
+
+func (a *App) showDeleteConfirm(msg string, onConfirm func()) {
+	modal := tview.NewModal().
+		SetText(msg).
+		AddButtons([]string{"取消", "删除"}).
+		SetFocus(0)
+	modal.SetDoneFunc(func(idx int, _ string) {
+		if idx == 1 {
+			onConfirm()
+		}
+		a.mode = ModeBookmarks
+		a.switchPage("bookmarks", a.bmList)
+	})
+	a.pages.AddAndSwitchToPage("deleteconfirm", modal, true)
+	a.tapp.SetFocus(modal)
+	a.mode = ModeBookmarks // keep mode as bookmarks
 }
 
 func (a *App) updateReaderStatus(msg string) {

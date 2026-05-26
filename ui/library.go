@@ -99,11 +99,7 @@ func (a *App) loadProgressPercent(path string) float64 {
 	return p.Percent
 }
 
-func (a *App) showAddBook() {
-	a.mode = ModeAddBook
-	a.addInput.SetText("")
-	a.switchPage("addbook", a.addInput)
-}
+// library.go 中的 showAddBook 已移到 filebrowser.go
 
 func (a *App) addBookByPath(path string) {
 	// Expand ~
@@ -146,8 +142,22 @@ func (a *App) removeBook() {
 		return
 	}
 	entry := a.library[idx]
-	a.store.RemoveBook(entry.Path)
-	a.refreshLibrary()
+	msg := fmt.Sprintf("从书库删除 \"%s\"?", entry.Title)
+	modal := tview.NewModal().
+		SetText(msg).
+		AddButtons([]string{"取消", "删除"}).
+		SetFocus(0)
+	modal.SetDoneFunc(func(buttonIdx int, _ string) {
+		if buttonIdx == 1 {
+			a.store.RemoveBook(entry.Path)
+			a.refreshLibrary()
+		}
+		a.mode = ModeLibrary
+		a.pages.SwitchToPage("library")
+		a.tapp.SetFocus(a.libList)
+	})
+	a.pages.AddAndSwitchToPage("deletelib", modal, true)
+		a.tapp.SetFocus(modal)
 }
 
 func (a *App) showError(msg string) {
@@ -158,13 +168,6 @@ func (a *App) showError(msg string) {
 			a.libTitle.SetText("[::b]epub-reader — 书库[::-]")
 		})
 	}()
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-1] + "…"
 }
 
 func truncatePad(s string, maxLen int) string {

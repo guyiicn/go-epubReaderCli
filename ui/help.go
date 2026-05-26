@@ -25,7 +25,7 @@ func (a *App) showHelp(from Mode) {
 
 func (a *App) closeHelp() {
 	switch a.prevMode {
-	case ModeLibrary:
+	case ModeLibrary, ModeFileBrowser:
 		a.mode = ModeLibrary
 		a.switchPage("library", a.libList)
 	case ModeReader:
@@ -59,8 +59,8 @@ func (a *App) buildHelpText() {
 		"  j/↓       下一本",
 		"  k/↑       上一本",
 		"  Enter     打开书籍",
-		"  a         添加书籍",
-		"  d         删除书籍",
+		"  a         添加书籍(文件浏览器)",
+		"  d         删除书籍(有确认)",
 		"  q         退出程序",
 		"",
 		"[::b]阅读模式[::-]",
@@ -76,17 +76,23 @@ func (a *App) buildHelpText() {
 		"  p         上一章",
 		"  t         目录弹窗",
 		"  b         书签列表",
-		"  a         添加书签",
+		"  a         添加书签(可输入备注)",
 		"  i         书籍信息",
 		"  c         切换单栏/双栏",
 		"  /         搜索当前章节",
+		"  x         全书搜索",
 		"  .         下一个搜索结果",
 		"  o/q/Esc   返回书库",
+		"",
+		"[::b]文件浏览器[::-]",
+		"  j/k/↑/↓   移动",
+		"  Enter     进入目录/选择文件",
+		"  Esc       取消返回书库",
 		"",
 		"[::b]弹窗通用 (目录/书签/帮助/信息)[::-]",
 		"  j/k/↑/↓   上下移动",
 		"  Enter     跳转/确认",
-		"  d         删除书签(书签列表)",
+		"  d         删除(书签列表, 有确认)",
 		"  Esc       关闭弹窗",
 	}, "\n")
 
@@ -149,26 +155,33 @@ func (a *App) closeInfo() {
 	a.switchPage("reader", a.readerView)
 }
 
-// --- Add Book ---
+// --- Bookmark Note Input ---
 
-func (a *App) setupAddBook() {
+func (a *App) setupBookmarkNote() {
 	input := tview.NewInputField().
-		SetLabel("EPUB 文件路径: ").
-		SetFieldWidth(50)
-	input.SetBorder(true).SetTitle(" 添加书籍 ")
+		SetLabel("备注: ").
+		SetFieldWidth(40)
+	input.SetBorder(true).SetTitle(" 添加书签 ")
 
 	input.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
-			path := input.GetText()
-			a.mode = ModeLibrary
-			a.addBookByPath(path)
+			note := input.GetText()
+			a.doAddBookmark(note)
+			a.mode = ModeReader
+			a.switchPage("reader", a.readerView)
 		case tcell.KeyEsc:
-			a.mode = ModeLibrary
-			a.switchPage("library", a.libList)
+			a.mode = ModeReader
+			a.switchPage("reader", a.readerView)
 		}
 	})
-	a.addInput = input
+	a.bmNoteInput = input
+}
+
+func (a *App) showBookmarkNoteInput() {
+	a.mode = ModeBookmarkNote
+	a.bmNoteInput.SetText("")
+	a.switchPage("bmnote", a.bmNoteInput)
 }
 
 // --- Search ---
@@ -178,11 +191,11 @@ func (a *App) setupSearch() {
 		SetLabel("搜索: ").
 		SetFieldWidth(40)
 	input.SetBorder(true).SetTitle(" 搜索 ")
-
 	input.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
 			a.searchTerm = input.GetText()
+			a.searchAllMode = false
 			a.executeSearch()
 		case tcell.KeyEsc:
 			a.mode = ModeReader
@@ -192,27 +205,44 @@ func (a *App) setupSearch() {
 	a.searchInput = input
 
 	a.searchResults = tview.NewList().
-		ShowSecondaryText(false)
+		ShowSecondaryText(true)
 	a.searchResults.
 		SetMainTextColor(tcell.ColorDefault).
 		SetSelectedTextColor(tcell.ColorDefault).
 		SetSelectedBackgroundColor(tcell.ColorDarkCyan)
 	a.searchResults.SetBorder(true).SetTitle(" 搜索结果 ")
-
 	a.searchResults.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
-		if idx < len(a.searchMatches) {
-			a.scrollPos = a.searchMatches[idx]
-			a.mode = ModeReader
-			a.switchPage("reader", a.readerView)
-			a.updateReaderDisplay()
+		if idx >= len(a.searchAllResults) {
+			return
 		}
+		r := a.searchAllResults[idx]
+		a.sectionIdx = r.sectionIdx
+		a.scrollPos = r.linePos
+		a.cachedSection = -1
+		a.mode = ModeReader
+		a.switchPage("reader", a.readerView)
+		a.renderCurrentSection()
 	})
 }
 
 func (a *App) showSearch() {
 	a.mode = ModeSearch
+	a.searchInput.SetBorder(true).SetTitle(" 搜索当前章节 ")
 	a.searchInput.SetText("")
 	a.switchPage("search", a.searchInput)
+}
+
+func (a *App) showSearchAll() {
+	a.mode = ModeSearch
+	a.searchInput.SetBorder(true).SetTitle(" 全书搜索 ")
+	a.searchInput.SetText("")
+	a.switchPage("search", a.searchInput)
+}
+
+type searchResult struct {
+	sectionIdx int
+	linePos    int
+	line       string
 }
 
 func (a *App) executeSearch() {
@@ -222,8 +252,15 @@ func (a *App) executeSearch() {
 		return
 	}
 
-	a.searchMatches = nil
 	term := strings.ToLower(a.searchTerm)
+
+	if a.searchAllMode {
+		a.executeSearchAll(term)
+		return
+	}
+
+	// Current chapter search
+	a.searchMatches = nil
 	for i, line := range a.lines {
 		if strings.Contains(strings.ToLower(line), term) {
 			a.searchMatches = append(a.searchMatches, i)
@@ -242,6 +279,57 @@ func (a *App) executeSearch() {
 	a.switchPage("reader", a.readerView)
 	a.updateReaderDisplay()
 	a.updateReaderStatus(fmt.Sprintf("找到 %d 处匹配", len(a.searchMatches)))
+}
+
+func (a *App) executeSearchAll(term string) {
+	a.searchAllResults = nil
+	a.searchResults.Clear()
+
+	for si := 0; si < len(a.book.Sections); si++ {
+		section := a.book.Sections[si]
+		lines := a.renderer.Render(section.HTML, a.colWidth)
+		for li, line := range lines {
+			if strings.Contains(strings.ToLower(line), term) {
+				a.searchAllResults = append(a.searchAllResults, searchResult{
+					sectionIdx: si,
+					linePos:    li,
+					line:       line,
+				})
+			}
+		}
+	}
+
+	if len(a.searchAllResults) == 0 {
+		a.updateReaderStatus("全书未找到: " + a.searchTerm)
+		a.mode = ModeReader
+		a.switchPage("reader", a.readerView)
+		return
+	}
+
+	// Show results list
+	for _, r := range a.searchAllResults {
+		title := fmt.Sprintf("Ch%d", r.sectionIdx+1)
+		if r.sectionIdx < len(a.book.Sections) {
+			title = a.book.Sections[r.sectionIdx].Title
+		}
+		a.searchResults.AddItem(
+			fmt.Sprintf("%s: %s", title, truncate(r.line, 60)),
+			fmt.Sprintf("行%d", r.linePos),
+			0, nil,
+		)
+	}
+
+	a.mode = ModeSearchResults
+	a.searchResults.SetTitle(fmt.Sprintf(" 搜索结果 (%d) ", len(a.searchAllResults)))
+	a.switchPage("searchresults", a.searchResults)
+}
+
+func truncate(s string, maxLen int) string {
+	// byte-based truncation for display
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-1] + "…"
 }
 
 func (a *App) nextSearchMatch() {

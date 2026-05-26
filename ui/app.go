@@ -22,6 +22,8 @@ const (
 	ModeSearch
 	ModeSearchResults
 	ModeInfo
+	ModeFileBrowser
+	ModeBookmarkNote
 )
 
 // App is the main application.
@@ -65,11 +67,18 @@ type App struct {
 	// Add book popup
 	addInput *tview.InputField
 
+	// File browser
+	fileList    *tview.List
+	fileEntries []fileEntry
+	currentDir  string
+
 	// Search
 	searchInput   *tview.InputField
 	searchResults *tview.List
 	searchTerm    string
 	searchMatches []int
+	searchAllMode bool // true = search all chapters
+	searchAllResults []searchResult
 
 	// Reader state
 	sectionIdx int
@@ -85,6 +94,9 @@ type App struct {
 
 	// Config
 	config epub.Config
+
+	// Bookmark note input
+	bmNoteInput *tview.InputField
 }
 
 // NewApp creates the application.
@@ -133,6 +145,7 @@ func (a *App) setupUI() {
 	a.setupInfo()
 	a.setupAddBook()
 	a.setupSearch()
+	a.setupBookmarkNote()
 
 	a.pages.AddPage("library", a.libFlex, true, true)
 	a.pages.AddPage("reader", a.readerFlex, true, false)
@@ -143,6 +156,8 @@ func (a *App) setupUI() {
 	a.pages.AddPage("addbook", a.centerWidget(a.addInput, 60, 3), true, false)
 	a.pages.AddPage("search", a.centerWidget(a.searchInput, 60, 3), true, false)
 	a.pages.AddPage("searchresults", a.searchResults, true, false)
+	a.pages.AddPage("filebrowser", a.fileList, true, false)
+	a.pages.AddPage("bmnote", a.centerWidget(a.bmNoteInput, 60, 3), true, false)
 
 	a.tapp.SetRoot(a.pages, true)
 	a.tapp.SetFocus(a.libList)
@@ -178,7 +193,7 @@ func (a *App) setupKeys() {
 		}
 
 		// h 呼出帮助，任何模式下都可以（除了输入框模式）
-		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch {
+		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote {
 			a.showHelp(a.mode)
 			return nil
 		}
@@ -201,8 +216,12 @@ func (a *App) setupKeys() {
 			return ev
 		case ModeSearch:
 			return ev
+		case ModeBookmarkNote:
+			return ev
 		case ModeSearchResults:
 			return a.handleSearchResultsKey(ev)
+		case ModeFileBrowser:
+			return a.handleFileBrowserKey(ev)
 		}
 		return ev
 	})
@@ -292,6 +311,9 @@ func (a *App) handleReaderKey(ev *tcell.EventKey) {
 
 	case r == '/':
 		a.showSearch()
+
+	case r == 'x':
+		a.showSearchAll()
 
 	case r == '.':
 		a.nextSearchMatch()

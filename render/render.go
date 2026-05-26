@@ -218,6 +218,23 @@ func extractBlocks(n *html.Node) []textBlock {
 	return blocks
 }
 
+// collectTextOnly recursively collects raw text from children, no markup wrapping.
+func collectTextOnly(n *html.Node) string {
+	var sb strings.Builder
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			sb.WriteString(n.Data)
+		} else if n.Type == html.ElementNode {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+		}
+	}
+	walk(n)
+	return strings.TrimSpace(sb.String())
+}
+
 func collectInlineText(n *html.Node) string {
 	var parts []string
 	var walk func(*html.Node)
@@ -237,6 +254,21 @@ func collectInlineText(n *html.Node) string {
 					alt = getHTMLAttr(n, "src")
 				}
 				parts = append(parts, fmt.Sprintf("[图片: %s]", alt))
+			case "code":
+				inner := collectTextOnly(n)
+				if inner != "" {
+					parts = append(parts, "`"+inner+"`")
+				}
+			case "strong", "b":
+				inner := collectTextOnly(n)
+				if inner != "" {
+					parts = append(parts, "*"+inner+"*")
+				}
+			case "em", "i":
+				inner := collectTextOnly(n)
+				if inner != "" {
+					parts = append(parts, "_"+inner+"_")
+				}
 			default:
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					walk(c)
