@@ -12,4 +12,4 @@ test
 *.swo
 
 # Test data
-*.epub
+/*.epub
