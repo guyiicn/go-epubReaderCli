@@ -252,41 +252,24 @@ func (a *App) handleReaderKey(ev *tcell.EventKey) {
 	key := ev.Key()
 
 	switch {
-	// j/k: 单栏滚1行，双栏翻1页
-	case r == 'j' || key == tcell.KeyDown:
-		if a.columns == 2 {
-			a.scrollBy(1)
-		} else {
-			a.scrollByLine(1)
-		}
+	// 翻页 (章节无缝衔接)
+	case key == tcell.KeyRight || key == tcell.KeyPgDn || r == ' ':
+		a.pageForward()
 
-	case r == 'k' || key == tcell.KeyUp:
-		if a.columns == 2 {
-			a.scrollBy(-1)
-		} else {
-			a.scrollByLine(-1)
-		}
-
-	// 翻页
-	case key == tcell.KeyPgDn || r == ' ' || key == tcell.KeyRight:
-		if a.columns == 2 {
-			a.scrollBy(1)
-		} else {
-			a.scrollByLine(a.pageHeight)
-		}
-
-	case key == tcell.KeyPgUp || key == tcell.KeyBackspace || key == tcell.KeyBackspace2 || key == tcell.KeyLeft:
-		if a.columns == 2 {
-			a.scrollBy(-1)
-		} else {
-			a.scrollByLine(-a.pageHeight)
-		}
+	case key == tcell.KeyLeft || key == tcell.KeyPgUp || key == tcell.KeyBackspace || key == tcell.KeyBackspace2:
+		a.pageBackward()
 
 	case r == 'g':
-		a.scrollTo(0)
+		a.scrollPos = 0
+		a.updateReaderDisplay()
 
 	case r == 'e':
-		a.scrollTo(len(a.lines) - 1)
+		ps := a.pageSize()
+		totalLines := len(a.lines)
+		if totalLines > 0 {
+			a.scrollPos = ((totalLines - 1) / ps) * ps
+		}
+		a.updateReaderDisplay()
 
 	case r == 'n':
 		a.nextSection()

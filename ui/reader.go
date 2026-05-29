@@ -44,7 +44,9 @@ func (a *App) openBookByPath(path string) {
 	a.bookPath = path
 	a.mode = ModeReader
 
-	// 加入书库（如已在则更新）
+	a.store.UpdateLastOpened(path)
+
+	// Join book into library
 	title := book.Title
 	if title == "" {
 		title = filepath.Base(path)
@@ -85,9 +87,7 @@ func (a *App) getScreenSize() (int, int) {
 	return w, h
 }
 
-// pageSize returns how many source lines one "page" consumes.
-// 单栏: pageHeight 行 → 一屏
-// 双栏: 2*pageHeight 行 → 左右各 pageHeight 行
+// pageSize: how many source lines one page consumes.
 func (a *App) pageSize() int {
 	if a.columns == 2 {
 		return a.pageHeight * 2
@@ -105,19 +105,13 @@ func (a *App) totalPages() int {
 	return (totalLines + ps - 1) / ps
 }
 
-// currentPage returns 0-based page index for current scrollPos.
+// currentPage returns 0-based page index.
 func (a *App) currentPage() int {
 	ps := a.pageSize()
 	if ps <= 0 {
 		return 0
 	}
 	return a.scrollPos / ps
-}
-
-// alignToPage snaps scrollPos to page boundary (双栏用).
-func (a *App) alignToPage() {
-	ps := a.pageSize()
-	a.scrollPos = (a.scrollPos / ps) * ps
 }
 
 func (a *App) renderCurrentSection() {
@@ -140,7 +134,6 @@ func (a *App) renderCurrentSection() {
 		newColWidth = 10
 	}
 
-	// Detect resize → invalidate cache
 	if newColWidth != a.colWidth {
 		a.cachedSection = -1
 		a.cachedWidth = -1
@@ -158,15 +151,11 @@ func (a *App) renderCurrentSection() {
 	if totalLines == 0 {
 		a.scrollPos = 0
 	} else {
-		// 双栏: 对齐到页边界
-		if a.columns == 2 {
-			a.alignToPage()
-		}
+		// Align to page boundary
+		ps := a.pageSize()
+		a.scrollPos = (a.scrollPos / ps) * ps
 		if a.scrollPos >= totalLines {
-			a.scrollPos = totalLines - 1
-			if a.columns == 2 {
-				a.alignToPage()
-			}
+			a.scrollPos = ((totalLines - 1) / ps) * ps
 		}
 		if a.scrollPos < 0 {
 			a.scrollPos = 0
@@ -212,11 +201,10 @@ func (a *App) updateReaderDisplay() {
 		} else {
 			displayText = strings.Join(a.lines[start:end], "\n")
 		}
-	} else {
+	} else if totalLines > 0 {
 		displayText = a.lines[0]
 	}
 
-	// Pad to fill screen
 	visibleLines := strings.Count(displayText, "\n") + 1
 	for i := visibleLines; i < a.pageHeight; i++ {
 		displayText += "\n"
@@ -282,103 +270,74 @@ func (a *App) buildTwoColumnDisplay(start, end int) string {
 	return sb.String()
 }
 
-// scrollBy scrolls by delta pages (双栏用，delta=1/-1 表示翻一页).
-// 到章节头/尾自动切到上/下一章。
-func (a *App) scrollBy(delta int) {
+// pageForward goes to next page, crossing chapter boundaries.
+func (a *App) pageForward() {
 	totalLines := len(a.lines)
-	if totalLines == 0 {
-		return
-	}
-
 	ps := a.pageSize()
-	newPos := a.scrollPos + delta*ps
-	if newPos >= totalLines {
-		// 翻过章节末尾 → 下一章
-		if a.sectionIdx+1 < len(a.book.Sections) {
-			a.sectionIdx++
-			a.scrollPos = 0
-			a.cachedSection = -1
-			a.renderCurrentSection()
-			return
-		}
-		newPos = ((totalLines - 1) / ps) * ps
-	}
-	if newPos < 0 {
-		// 翻过章节开头 → 上一章
-		if a.sectionIdx > 0 {
-			a.sectionIdx--
-			a.cachedSection = -1
-			a.renderCurrentSection()
-			// 跳到上一章末尾页
-			a.scrollPos = ((len(a.lines) - 1) / ps) * ps
-			a.updateReaderDisplay()
-			return
-		}
-		newPos = 0
-	}
-	a.scrollPos = newPos
-	a.updateReaderDisplay()
-}
 
-// scrollByLine scrolls by delta lines (单栏用).
-// 到章节头/尾自动切到上/下一章。
-func (a *App) scrollByLine(delta int) {
-	totalLines := len(a.lines)
-	if totalLines == 0 {
+	newPos := a.scrollPos + ps
+	if newPos < totalLines {
+		a.scrollPos = newPos
+		a.updateReaderDisplay()
+		a.saveProgress()
 		return
 	}
 
-	newPos := a.scrollPos + delta
-	if newPos >= totalLines {
-		// 滚过章节末尾 → 下一章
-		if a.sectionIdx+1 < len(a.book.Sections) {
-			a.sectionIdx++
-			a.scrollPos = 0
-			a.cachedSection = -1
-			a.renderCurrentSection()
-			return
-		}
-		newPos = totalLines - 1
-	}
-	if newPos < 0 {
-		// 滚过章节开头 → 上一章
-		if a.sectionIdx > 0 {
-			a.sectionIdx--
-			a.cachedSection = -1
-			a.renderCurrentSection()
-			a.scrollPos = len(a.lines) - 1
-			a.updateReaderDisplay()
-			return
-		}
-		newPos = 0
-	}
-	a.scrollPos = newPos
-	a.updateReaderDisplay()
-}
-
-func (a *App) scrollTo(pos int) {
-	totalLines := len(a.lines)
-	if totalLines == 0 {
+	// End of chapter, try next
+	if a.sectionIdx+1 < len(a.book.Sections) {
+		a.sectionIdx++
 		a.scrollPos = 0
+		a.cachedSection = -1
+		a.renderCurrentSection()
 		return
 	}
-	if pos < 0 {
-		pos = 0
+
+	// Last page of last chapter, do nothing
+}
+
+// pageBackward goes to previous page, crossing chapter boundaries.
+func (a *App) pageBackward() {
+	if a.scrollPos > 0 {
+		ps := a.pageSize()
+		a.scrollPos -= ps
+		if a.scrollPos < 0 {
+			a.scrollPos = 0
+		}
+		a.updateReaderDisplay()
+		a.saveProgress()
+		return
 	}
-	if pos >= totalLines {
-		pos = totalLines - 1
+
+	// Start of chapter, try previous chapter → go to its last page
+	if a.sectionIdx > 0 {
+		a.sectionIdx--
+		a.cachedSection = -1
+		// Need to render first to know total lines
+		section := a.book.Sections[a.sectionIdx]
+		a.lines = a.renderer.Render(section.HTML, a.colWidth)
+		a.cachedSection = a.sectionIdx
+		a.cachedWidth = a.colWidth
+
+		ps := a.pageSize()
+		totalLines := len(a.lines)
+		if totalLines == 0 {
+			a.scrollPos = 0
+		} else {
+			a.scrollPos = ((totalLines - 1) / ps) * ps
+		}
+		a.updateReaderDisplay()
+		a.saveProgress()
+		return
 	}
-	a.scrollPos = pos
-	if a.columns == 2 {
-		a.alignToPage()
-	}
-	a.updateReaderDisplay()
+
+	// First page of first chapter, do nothing
 }
 
 func (a *App) nextSection() {
 	if a.sectionIdx+1 < len(a.book.Sections) {
 		a.sectionIdx++
 		a.scrollPos = 0
+		a.cachedSection = -1
 		a.renderCurrentSection()
 	}
 }
@@ -387,6 +346,7 @@ func (a *App) prevSection() {
 	if a.sectionIdx > 0 {
 		a.sectionIdx--
 		a.scrollPos = 0
+		a.cachedSection = -1
 		a.renderCurrentSection()
 	}
 }
@@ -395,6 +355,7 @@ func (a *App) goToSection(idx int) {
 	if idx >= 0 && idx < len(a.book.Sections) {
 		a.sectionIdx = idx
 		a.scrollPos = 0
+		a.cachedSection = -1
 		a.renderCurrentSection()
 	}
 }

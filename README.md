@@ -75,14 +75,12 @@ Data is stored in `~/.config/epub-reader/`:
 
 ### Reader
 
-| Key | Action (Single Column) | Action (Dual Column) |
-|-----|----------------------|---------------------|
-| `j` / `↓` | Scroll down 1 line | Next page |
-| `k` / `↑` | Scroll up 1 line | Previous page |
-| `Space` / `→` / `PgDn` | Scroll down one screen | Next page |
-| `Backspace` / `←` / `PgUp` | Scroll up one screen | Previous page |
+| Key | Action |
+|-----|--------|
+| `←` / `Space` / `PgDn` | Next page (crosses chapters) |
+| `→` / `Backspace` / `PgUp` | Previous page (crosses chapters) |
 
-Scrolling past chapter end → auto-enters next chapter. Scrolling past chapter start → auto-enters previous chapter.
+Flipping past the last page of a chapter automatically enters the next chapter. Flipping past the first page goes to the previous chapter.
 
 | Key | Action |
 |-----|--------|
