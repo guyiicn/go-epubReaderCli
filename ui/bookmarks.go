@@ -105,8 +105,7 @@ func (a *App) deleteBookmark() {
 	}
 	// Confirm deletion — use a modal
 	a.showDeleteConfirm(fmt.Sprintf("删除书签 \"%s\"?", bms[idx].Note), func() {
-		bms = append(bms[:idx], bms[idx+1:]...)
-		a.store.SaveBookmarks(a.bookPath, bms)
+		a.store.DeleteBookmark(a.bookPath, bms[idx].ID)
 		a.buildBookmarksList()
 	})
 }
@@ -140,4 +139,32 @@ func (a *App) updateReaderStatus(msg string) {
 		})
 	}()
 	_ = strings.TrimSpace(status)
+}
+
+func (a *App) addAnnotation() {
+	if a.book == nil {
+		return
+	}
+	a.showAnnotationNoteInput()
+}
+
+func (a *App) doAddAnnotation(note string) {
+	if a.book == nil {
+		return
+	}
+	selected := "position note"
+	if a.scrollPos >= 0 && a.scrollPos < len(a.lines) {
+		selected = strings.TrimSpace(a.lines[a.scrollPos])
+	}
+	if selected == "" {
+		selected = "position note"
+	}
+	if len(selected) > 500 {
+		selected = selected[:500]
+	}
+	if err := a.store.AddAnnotation(a.bookPath, selected, note, a.sectionIdx, a.scrollPos); err != nil {
+		a.updateReaderStatus(fmt.Sprintf("标注失败: %v", err))
+		return
+	}
+	a.updateReaderStatus("当前位置笔记已添加")
 }

@@ -34,6 +34,10 @@ func (a *App) setupReader() {
 }
 
 func (a *App) openBookByPath(path string) {
+	if path == "" {
+		a.showError("远端书籍需要先下载")
+		return
+	}
 	book, err := epub.Load(path)
 	if err != nil {
 		a.showError(fmt.Sprintf("无法打开: %v", err))

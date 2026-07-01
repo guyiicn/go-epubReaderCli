@@ -3,16 +3,45 @@ package epub
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
+	stdhtml "html"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
 
 func Load(path string) (*Book, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".epub":
+		return loadEPUB(path)
+	case ".txt", ".md", ".markdown":
+		return loadTextBook(path, strings.TrimPrefix(ext, "."))
+	case ".mobi", ".azw3":
+		converted, err := convertToEPUB(path)
+		if err != nil {
+			return nil, err
+		}
+		return loadEPUB(converted)
+	case ".pdf":
+		converted, err := convertPDFToText(path)
+		if err != nil {
+			return nil, err
+		}
+		return loadTextBook(converted, "txt")
+	default:
+		return nil, fmt.Errorf("unsupported format %s", ext)
+	}
+}
+
+func loadEPUB(path string) (*Book, error) {
 	r, err := zip.OpenReader(path)
 	if err != nil {
 		return nil, fmt.Errorf("open epub: %w", err)
@@ -101,6 +130,158 @@ func Load(path string) (*Book, error) {
 	resolveTitles(book)
 
 	return book, nil
+}
+
+func loadTextBook(path, format string) (*Book, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read text book: %w", err)
+	}
+	title := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	chunks := splitTextSections(string(data))
+	sections := make([]Section, 0, len(chunks))
+	toc := make([]TOCEntry, 0, len(chunks))
+	for i, chunk := range chunks {
+		sectionTitle := fmt.Sprintf("Part %d", i+1)
+		htmlText := textToHTML(chunk)
+		sections = append(sections, Section{
+			ID:    fmt.Sprintf("s%d", i),
+			Href:  fmt.Sprintf("s%d.%s", i, format),
+			Title: sectionTitle,
+			Index: i,
+			HTML:  htmlText,
+		})
+		toc = append(toc, TOCEntry{Title: sectionTitle, SectionID: sections[i].Href, SectionIndex: i})
+	}
+	if len(sections) == 0 {
+		sections = []Section{{ID: "s0", Href: "s0.txt", Title: "Text", HTML: ""}}
+	}
+	return &Book{
+		Title:    title,
+		Sections: sections,
+		TOC:      toc,
+		Meta: Metadata{
+			Title: title,
+		},
+	}, nil
+}
+
+func splitTextSections(s string) []string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	paragraphs := strings.Split(s, "\n\n")
+	var sections []string
+	var current strings.Builder
+	for _, p := range paragraphs {
+		if current.Len() > 80_000 {
+			sections = append(sections, current.String())
+			current.Reset()
+		}
+		current.WriteString(p)
+		current.WriteString("\n\n")
+	}
+	if strings.TrimSpace(current.String()) != "" {
+		sections = append(sections, current.String())
+	}
+	return sections
+}
+
+func textToHTML(s string) string {
+	parts := strings.Split(s, "\n\n")
+	var sb strings.Builder
+	sb.WriteString("<html><body>")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		lines := strings.Split(stdhtml.EscapeString(p), "\n")
+		sb.WriteString("<p>")
+		sb.WriteString(strings.Join(lines, "<br/>"))
+		sb.WriteString("</p>")
+	}
+	sb.WriteString("</body></html>")
+	return sb.String()
+}
+
+func convertToEPUB(path string) (string, error) {
+	if _, err := exec.LookPath("ebook-convert"); err != nil {
+		return "", fmt.Errorf("MOBI/AZW3 support requires Calibre ebook-convert in PATH")
+	}
+	dst := convertedPath(path, ".epub")
+	if isFresh(dst, path) {
+		return dst, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return "", err
+	}
+	cmd := exec.Command("ebook-convert", path, dst)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("ebook-convert failed: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return dst, nil
+}
+
+func convertPDFToText(path string) (string, error) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		return "", fmt.Errorf("PDF support requires pdftotext in PATH")
+	}
+	dst := convertedPath(path, ".txt")
+	if isFresh(dst, path) {
+		return dst, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return "", err
+	}
+	cmd := exec.Command("pdftotext", "-layout", path, dst)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("pdftotext failed: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return dst, nil
+}
+
+func convertedPath(path, ext string) string {
+	cacheHome := os.Getenv("XDG_CACHE_HOME")
+	if cacheHome == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			cacheHome = filepath.Join(home, ".cache")
+		} else {
+			cacheHome = os.TempDir()
+		}
+	}
+	info, _ := os.Stat(path)
+	key := fmt.Sprintf("%s:%d:%d", path, infoSize(info), infoModUnix(info))
+	raw := sha256.Sum256([]byte(key))
+	sum := fmt.Sprintf("%x", raw[:])
+	return filepath.Join(cacheHome, "epub-reader-term", "converted", sum+ext)
+}
+
+func isFresh(dst, src string) bool {
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		return false
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return true
+	}
+	return !dstInfo.ModTime().Before(srcInfo.ModTime())
+}
+
+func infoSize(info os.FileInfo) int64 {
+	if info == nil {
+		return 0
+	}
+	return info.Size()
+}
+
+func infoModUnix(info os.FileInfo) int64 {
+	if info == nil {
+		return time.Now().Unix()
+	}
+	return info.ModTime().Unix()
 }
 
 // resolveTitles sets Section.Title using TOC, <title>, <h1>, or fallback.

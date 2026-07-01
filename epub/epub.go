@@ -59,10 +59,10 @@ type Rootfile struct {
 }
 
 type OPF struct {
-	XMLName  xml.Name   `xml:"package"`
+	XMLName  xml.Name    `xml:"package"`
 	Metadata OPFMetadata `xml:"metadata"`
-	Manifest Manifest   `xml:"manifest"`
-	Spine    Spine      `xml:"spine"`
+	Manifest Manifest    `xml:"manifest"`
+	Spine    Spine       `xml:"spine"`
 }
 
 type OPFMetadata struct {
@@ -79,9 +79,9 @@ type Manifest struct {
 }
 
 type ManifestItem struct {
-	ID        string `xml:"id,attr"`
-	Href      string `xml:"href,attr"`
-	MediaType string `xml:"media-type,attr"`
+	ID         string `xml:"id,attr"`
+	Href       string `xml:"href,attr"`
+	MediaType  string `xml:"media-type,attr"`
 	Properties string `xml:"properties,attr"`
 }
 
@@ -122,11 +122,20 @@ type Content struct {
 // --- Store types (avoid circular import, defined here for sharing) ---
 
 type LibraryEntry struct {
-	Path        string    `json:"path"`
-	Title       string    `json:"title"`
-	Author      string    `json:"author"`
-	LastOpened  time.Time `json:"last_opened"`
-	AddedAt     time.Time `json:"added_at"`
+	ID             string    `json:"id,omitempty"`
+	ServerID       string    `json:"server_id,omitempty"`
+	Path           string    `json:"path"`
+	Title          string    `json:"title"`
+	Author         string    `json:"author"`
+	Format         string    `json:"format,omitempty"`
+	OriginalFormat string    `json:"original_format,omitempty"`
+	ReadableFormat string    `json:"readable_format,omitempty"`
+	ContentHash    string    `json:"content_hash,omitempty"`
+	RemoteOnly     bool      `json:"remote_only,omitempty"`
+	Dirty          bool      `json:"dirty,omitempty"`
+	DeletedAt      time.Time `json:"deleted_at,omitempty"`
+	LastOpened     time.Time `json:"last_opened"`
+	AddedAt        time.Time `json:"added_at"`
 }
 
 type Progress struct {
@@ -134,6 +143,8 @@ type Progress struct {
 	LinePos      int       `json:"line_pos"`
 	Percent      float64   `json:"percent"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	UpdatedBy    string    `json:"updated_by,omitempty"`
+	Dirty        bool      `json:"dirty,omitempty"`
 }
 
 type Bookmark struct {
@@ -141,7 +152,12 @@ type Bookmark struct {
 	SectionIndex int       `json:"section_index"`
 	LinePos      int       `json:"line_pos"`
 	Note         string    `json:"note"`
+	Color        string    `json:"color,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+	CreatedBy    string    `json:"created_by,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	DeletedAt    time.Time `json:"deleted_at,omitempty"`
+	Dirty        bool      `json:"dirty,omitempty"`
 }
 
 type Config struct {

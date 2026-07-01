@@ -24,6 +24,7 @@ const (
 	ModeInfo
 	ModeFileBrowser
 	ModeBookmarkNote
+	ModeAnnotationNote
 )
 
 // App is the main application.
@@ -73,11 +74,11 @@ type App struct {
 	currentDir  string
 
 	// Search
-	searchInput   *tview.InputField
-	searchResults *tview.List
-	searchTerm    string
-	searchMatches []int
-	searchAllMode bool // true = search all chapters
+	searchInput      *tview.InputField
+	searchResults    *tview.List
+	searchTerm       string
+	searchMatches    []int
+	searchAllMode    bool // true = search all chapters
 	searchAllResults []searchResult
 
 	// Reader state
@@ -96,7 +97,8 @@ type App struct {
 	config epub.Config
 
 	// Bookmark note input
-	bmNoteInput *tview.InputField
+	bmNoteInput         *tview.InputField
+	annotationNoteInput *tview.InputField
 }
 
 // NewApp creates the application.
@@ -146,6 +148,7 @@ func (a *App) setupUI() {
 	a.setupAddBook()
 	a.setupSearch()
 	a.setupBookmarkNote()
+	a.setupAnnotationNote()
 
 	a.pages.AddPage("library", a.libFlex, true, true)
 	a.pages.AddPage("reader", a.readerFlex, true, false)
@@ -158,6 +161,7 @@ func (a *App) setupUI() {
 	a.pages.AddPage("searchresults", a.searchResults, true, false)
 	a.pages.AddPage("filebrowser", a.fileList, true, false)
 	a.pages.AddPage("bmnote", a.centerWidget(a.bmNoteInput, 60, 3), true, false)
+	a.pages.AddPage("annotationnote", a.centerWidget(a.annotationNoteInput, 70, 3), true, false)
 
 	a.tapp.SetRoot(a.pages, true)
 	a.tapp.SetFocus(a.libList)
@@ -193,7 +197,7 @@ func (a *App) setupKeys() {
 		}
 
 		// h 呼出帮助，任何模式下都可以（除了输入框模式）
-		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote {
+		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote && a.mode != ModeAnnotationNote {
 			a.showHelp(a.mode)
 			return nil
 		}
@@ -218,6 +222,8 @@ func (a *App) setupKeys() {
 			return ev
 		case ModeBookmarkNote:
 			return ev
+		case ModeAnnotationNote:
+			return ev
 		case ModeSearchResults:
 			return a.handleSearchResultsKey(ev)
 		case ModeFileBrowser:
@@ -235,6 +241,9 @@ func (a *App) handleLibraryKey(ev *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case ev.Rune() == 'd':
 		a.removeBook()
+		return nil
+	case ev.Rune() == 's':
+		a.syncNow()
 		return nil
 	case ev.Rune() == 'q':
 		a.tapp.Stop()
@@ -291,6 +300,9 @@ func (a *App) handleReaderKey(ev *tcell.EventKey) {
 
 	case r == 'a':
 		a.addBookmark()
+
+	case r == 'm':
+		a.addAnnotation()
 
 	case r == '/':
 		a.showSearch()

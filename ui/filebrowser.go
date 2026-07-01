@@ -57,10 +57,10 @@ func (a *App) setupAddBook() {
 }
 
 type fileEntry struct {
-	path      string
-	name      string
-	isDir     bool
-	isParent  bool
+	path     string
+	name     string
+	isDir    bool
+	isParent bool
 }
 
 func (a *App) browseDir(dir string) {
@@ -97,7 +97,7 @@ func (a *App) browseDir(dir string) {
 			dirs = append(dirs, e)
 		} else {
 			lower := strings.ToLower(name)
-			if strings.HasSuffix(lower, ".epub") {
+			if isSupportedBookFile(lower) {
 				files = append(files, e)
 			}
 		}
@@ -148,4 +148,13 @@ func (a *App) showAddBook() {
 	// Start file browser from home directory
 	home, _ := os.UserHomeDir()
 	a.browseDir(home)
+}
+
+func isSupportedBookFile(name string) bool {
+	for _, ext := range []string{".epub", ".txt", ".md", ".markdown", ".mobi", ".azw3", ".pdf"} {
+		if strings.HasSuffix(name, ext) {
+			return true
+		}
+	}
+	return false
 }

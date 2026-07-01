@@ -40,6 +40,9 @@ func (a *App) closeHelp() {
 	case ModeInfo:
 		a.mode = ModeInfo
 		a.switchPage("info", a.infoView)
+	case ModeAnnotationNote:
+		a.mode = ModeReader
+		a.switchPage("reader", a.readerView)
 	default:
 		a.mode = ModeReader
 		a.switchPage("reader", a.readerView)
@@ -73,6 +76,7 @@ func (a *App) buildHelpText() {
 		"  t         目录弹窗",
 		"  b         书签列表",
 		"  a         添加书签(可输入备注)",
+		"  m         添加当前位置笔记/标注",
 		"  i         书籍信息",
 		"  c         切换单栏/双栏",
 		"  /         搜索当前章节",
@@ -172,6 +176,33 @@ func (a *App) setupBookmarkNote() {
 		}
 	})
 	a.bmNoteInput = input
+}
+
+func (a *App) setupAnnotationNote() {
+	input := tview.NewInputField().
+		SetLabel("笔记: ").
+		SetFieldWidth(50)
+	input.SetBorder(true).SetTitle(" 添加当前位置笔记 ")
+
+	input.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEnter:
+			note := input.GetText()
+			a.doAddAnnotation(note)
+			a.mode = ModeReader
+			a.switchPage("reader", a.readerView)
+		case tcell.KeyEsc:
+			a.mode = ModeReader
+			a.switchPage("reader", a.readerView)
+		}
+	})
+	a.annotationNoteInput = input
+}
+
+func (a *App) showAnnotationNoteInput() {
+	a.mode = ModeAnnotationNote
+	a.annotationNoteInput.SetText("")
+	a.switchPage("annotationnote", a.annotationNoteInput)
 }
 
 func (a *App) showBookmarkNoteInput() {
