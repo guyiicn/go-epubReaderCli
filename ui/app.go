@@ -127,6 +127,7 @@ func (a *App) Run(args []string) error {
 	} else {
 		a.refreshLibrary()
 	}
+	a.startRealtimeSync()
 
 	a.tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		a.screen = screen

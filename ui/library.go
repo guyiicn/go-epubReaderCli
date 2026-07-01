@@ -32,11 +32,7 @@ func (a *App) setupLibrary() {
 		if idx >= len(a.library) {
 			return
 		}
-		if a.library[idx].RemoteOnly || a.library[idx].Path == "" {
-			a.showError("远端书籍需要先用 download 下载")
-			return
-		}
-		a.openBookByPath(a.library[idx].Path)
+		a.openLibraryEntry(a.library[idx])
 	})
 
 	statusText := "[Enter]打开 [a]添加 [s]同步 [d]删除 [h]帮助 [q]退出"
@@ -181,6 +177,45 @@ func (a *App) removeBook() {
 	a.tapp.SetFocus(modal)
 }
 
+func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
+	if !entry.RemoteOnly && entry.Path != "" {
+		a.openBookByPath(entry.Path)
+		return
+	}
+	serverID := entry.ServerID
+	if serverID == "" {
+		serverID = entry.ID
+	}
+	if serverID == "" {
+		a.showError("远端书籍缺少 server id")
+		return
+	}
+	a.libTitle.SetText("[yellow]下载远端书籍...[::-]")
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		auth, _ := a.store.AuthState()
+		client, err := server.NewClient(auth.ServerURL, a.store)
+		var dst string
+		if err == nil {
+			dst = a.store.BookStoragePath(entry.ContentHash, serverID, entry.Format)
+			var n int64
+			n, err = client.DownloadBookFile(ctx, serverID, dst)
+			if err == nil {
+				err = a.store.MarkDownloaded(serverID, dst, entry.ContentHash, n)
+			}
+		}
+		a.tapp.QueueUpdateDraw(func() {
+			if err != nil {
+				a.showError(fmt.Sprintf("下载失败: %v", err))
+				return
+			}
+			a.refreshLibrary()
+			a.openBookByPath(dst)
+		})
+	}()
+}
+
 func (a *App) showError(msg string) {
 	a.libTitle.SetText(fmt.Sprintf("[red]%s[::-]", msg))
 	go func() {
@@ -215,6 +250,40 @@ func (a *App) syncNow() {
 				})
 			}()
 		})
+	}()
+}
+
+func (a *App) startRealtimeSync() {
+	auth, _ := a.store.AuthState()
+	if auth.ServerURL == "" || auth.AccessToken == "" || auth.DeviceID == "" {
+		return
+	}
+	go func() {
+		for {
+			ctx, cancel := context.WithCancel(context.Background())
+			ch := make(chan server.InvalidateMessage, 8)
+			ws, err := server.NewWSClient(auth.ServerURL, a.store)
+			if err == nil {
+				go func() {
+					for msg := range ch {
+						if msg.Table != "" {
+							a.tapp.QueueUpdateDraw(func() {
+								a.libTitle.SetText("[yellow]收到远端更新，正在同步...[::-]")
+							})
+							a.syncNow()
+						}
+					}
+				}()
+				err = ws.Listen(ctx, ch)
+			}
+			cancel()
+			close(ch)
+			time.Sleep(10 * time.Second)
+			auth, _ = a.store.AuthState()
+			if auth.ServerURL == "" || auth.AccessToken == "" {
+				return
+			}
+		}
 	}()
 }
 
