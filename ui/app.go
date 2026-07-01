@@ -2,6 +2,7 @@ package ui
 
 import (
 	"epub-reader/epub"
+	"epub-reader/internal/server"
 	"epub-reader/render"
 	"epub-reader/store"
 
@@ -25,6 +26,8 @@ const (
 	ModeFileBrowser
 	ModeBookmarkNote
 	ModeAnnotationNote
+	ModeFindInput
+	ModeFindResults
 )
 
 // App is the main application.
@@ -80,6 +83,11 @@ type App struct {
 	searchMatches    []int
 	searchAllMode    bool // true = search all chapters
 	searchAllResults []searchResult
+
+	// Find book
+	findInput   *tview.InputField
+	findResults *tview.List
+	findBooks   []server.SearchBook
 
 	// Reader state
 	sectionIdx int
@@ -148,6 +156,7 @@ func (a *App) setupUI() {
 	a.setupInfo()
 	a.setupAddBook()
 	a.setupSearch()
+	a.setupFindBook()
 	a.setupBookmarkNote()
 	a.setupAnnotationNote()
 
@@ -160,6 +169,8 @@ func (a *App) setupUI() {
 	a.pages.AddPage("addbook", a.centerWidget(a.addInput, 60, 3), true, false)
 	a.pages.AddPage("search", a.centerWidget(a.searchInput, 60, 3), true, false)
 	a.pages.AddPage("searchresults", a.searchResults, true, false)
+	a.pages.AddPage("find", a.centerWidget(a.findInput, 70, 3), true, false)
+	a.pages.AddPage("findresults", a.findResults, true, false)
 	a.pages.AddPage("filebrowser", a.fileList, true, false)
 	a.pages.AddPage("bmnote", a.centerWidget(a.bmNoteInput, 60, 3), true, false)
 	a.pages.AddPage("annotationnote", a.centerWidget(a.annotationNoteInput, 70, 3), true, false)
@@ -198,7 +209,7 @@ func (a *App) setupKeys() {
 		}
 
 		// h 呼出帮助，任何模式下都可以（除了输入框模式）
-		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote && a.mode != ModeAnnotationNote {
+		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote && a.mode != ModeAnnotationNote && a.mode != ModeFindInput {
 			a.showHelp(a.mode)
 			return nil
 		}
@@ -229,6 +240,10 @@ func (a *App) setupKeys() {
 			return a.handleSearchResultsKey(ev)
 		case ModeFileBrowser:
 			return a.handleFileBrowserKey(ev)
+		case ModeFindInput:
+			return ev
+		case ModeFindResults:
+			return a.handleFindResultsKey(ev)
 		}
 		return ev
 	})
@@ -245,6 +260,9 @@ func (a *App) handleLibraryKey(ev *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case ev.Rune() == 's':
 		a.syncNow()
+		return nil
+	case ev.Rune() == 'f':
+		a.showFindBook()
 		return nil
 	case ev.Rune() == 'q':
 		a.tapp.Stop()
