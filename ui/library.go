@@ -227,30 +227,63 @@ func (a *App) showError(msg string) {
 }
 
 func (a *App) syncNow() {
-	a.libTitle.SetText("[yellow]同步中...[::-]")
+	a.syncMu.Lock()
+	if a.syncRunning {
+		a.syncPending = true
+		a.syncMu.Unlock()
+		return
+	}
+	a.syncRunning = true
+	a.syncMu.Unlock()
+
+	a.tapp.QueueUpdateDraw(func() {
+		a.libTitle.SetText("[yellow]同步中...[::-]")
+	})
+
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		auth, _ := a.store.AuthState()
-		client, err := server.NewClient(auth.ServerURL, a.store)
-		if err == nil {
-			err = server.NewEngine(a.store, client).Sync(ctx)
-		}
-		a.tapp.QueueUpdateDraw(func() {
-			if err != nil {
-				a.showError(fmt.Sprintf("同步失败: %v", err))
-				return
+		for {
+			err := a.performSyncOnce()
+			a.tapp.QueueUpdateDraw(func() {
+				if err != nil {
+					a.showError(fmt.Sprintf("同步失败: %v", err))
+				} else {
+					a.libTitle.SetText("[green]同步完成[::-]")
+					a.refreshLibrary()
+				}
+			})
+
+			a.syncMu.Lock()
+			if a.syncPending {
+				a.syncPending = false
+				a.syncMu.Unlock()
+				continue
 			}
-			a.libTitle.SetText("[green]同步完成[::-]")
-			a.refreshLibrary()
-			go func() {
-				time.Sleep(2 * time.Second)
-				a.tapp.QueueUpdateDraw(func() {
-					a.libTitle.SetText("[::b]epub-reader — 书库[::-]")
-				})
-			}()
-		})
+			a.syncRunning = false
+			a.syncMu.Unlock()
+			return
+		}
 	}()
+}
+
+func (a *App) performSyncOnce() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	auth, _ := a.store.AuthState()
+	client, err := server.NewClient(auth.ServerURL, a.store)
+	if err == nil {
+		err = server.NewEngine(a.store, client).Sync(ctx)
+	}
+	if err == nil {
+		go func() {
+			time.Sleep(2 * time.Second)
+			a.tapp.QueueUpdateDraw(func() {
+				if a.mode == ModeLibrary {
+					a.libTitle.SetText("[::b]epub-reader — 书库[::-]")
+				}
+			})
+		}()
+	}
+	return err
 }
 
 func (a *App) startRealtimeSync() {

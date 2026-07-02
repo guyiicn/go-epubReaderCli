@@ -712,6 +712,18 @@ func (s *Store) AddBook(path, title, author string) error {
 		format = "epub"
 	}
 	hash, size, _ := fileSHA256(path)
+	var existingID string
+	_ = s.db.QueryRow(`SELECT id FROM books WHERE deleted_at IS NULL AND file_path=? LIMIT 1`, path).Scan(&existingID)
+	if existingID != "" {
+		_, err = s.db.Exec(`UPDATE books SET content_hash=COALESCE(NULLIF(?,''), content_hash), title=?, author=?, format=?, original_format=?,
+			file_size=?, updated_at=?, remote_only=0, deleted_at=NULL, source='local'
+			WHERE id=?`,
+			nullEmpty(hash), title, author, format, format, size, now, existingID)
+		if err != nil {
+			return fmt.Errorf("add book: %w", err)
+		}
+		return nil
+	}
 	id := hash
 	if id == "" {
 		id = newID()

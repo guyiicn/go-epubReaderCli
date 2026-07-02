@@ -5,6 +5,7 @@ import (
 	"epub-reader/internal/server"
 	"epub-reader/render"
 	"epub-reader/store"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -103,6 +104,11 @@ type App struct {
 
 	// Config
 	config epub.Config
+
+	// Sync
+	syncMu      sync.Mutex
+	syncRunning bool
+	syncPending bool
 
 	// Bookmark note input
 	bmNoteInput         *tview.InputField

@@ -77,6 +77,9 @@ func runCommand(args []string, st *store.Store) error {
 		if len(args) < 2 {
 			return fmt.Errorf("usage: epub-reader-term open <book-id-or-query>")
 		}
+		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+			return fmt.Errorf("open requires an interactive terminal")
+		}
 		b, err := st.BookByIDOrQuery(strings.Join(args[1:], " "))
 		if err != nil {
 			return err
