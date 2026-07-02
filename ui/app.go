@@ -47,9 +47,10 @@ type App struct {
 	library  []epub.LibraryEntry
 
 	// Library widgets
-	libFlex  *tview.Flex
-	libList  *tview.List
-	libTitle *tview.TextView
+	libFlex   *tview.Flex
+	libList   *tview.List
+	libTitle  *tview.TextView
+	libStatus *tview.TextView
 
 	// Reader widgets
 	readerFlex  *tview.Flex
@@ -214,7 +215,7 @@ func (a *App) setupKeys() {
 			return nil
 		}
 
-		// h 呼出帮助，任何模式下都可以（除了输入框模式）
+		// h opens help from non-input modes.
 		if ev.Rune() == 'h' && a.mode != ModeAddBook && a.mode != ModeSearch && a.mode != ModeBookmarkNote && a.mode != ModeAnnotationNote && a.mode != ModeFindInput {
 			a.showHelp(a.mode)
 			return nil
@@ -265,7 +266,7 @@ func (a *App) handleLibraryKey(ev *tcell.EventKey) *tcell.EventKey {
 		a.removeBook()
 		return nil
 	case ev.Rune() == 's':
-		a.syncNow()
+		a.syncNowFromUI()
 		return nil
 	case ev.Rune() == 'f':
 		a.showFindBook()
@@ -286,7 +287,7 @@ func (a *App) handleReaderKey(ev *tcell.EventKey) {
 	key := ev.Key()
 
 	switch {
-	// 翻页 (章节无缝衔接)
+	// Page across chapter boundaries.
 	case key == tcell.KeyRight || key == tcell.KeyPgDn || r == ' ':
 		a.pageForward()
 

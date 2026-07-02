@@ -16,9 +16,9 @@ import (
 func (a *App) setupAddBook() {
 	// Keep the old InputField for manual path entry
 	a.addInput = tview.NewInputField().
-		SetLabel("EPUB 路径: ").
+		SetLabel("Book path: ").
 		SetFieldWidth(50)
-	a.addInput.SetBorder(true).SetTitle(" 添加书籍 ")
+	a.addInput.SetBorder(true).SetTitle(" Add Book ")
 	a.addInput.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
@@ -37,7 +37,7 @@ func (a *App) setupAddBook() {
 		SetMainTextColor(tcell.ColorDefault).
 		SetSelectedTextColor(tcell.ColorDefault).
 		SetSelectedBackgroundColor(tcell.ColorDarkCyan)
-	a.fileList.SetBorder(true).SetTitle(" 选择EPUB文件 ")
+	a.fileList.SetBorder(true).SetTitle(" Select Book File ")
 	a.fileList.SetSelectedFunc(func(idx int, mainText string, _ string, _ rune) {
 		if idx >= len(a.fileEntries) {
 			return
@@ -70,7 +70,7 @@ func (a *App) browseDir(dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		a.fileList.Clear()
-		a.fileList.AddItem(fmt.Sprintf("无法读取: %v", err), "", 0, nil)
+		a.fileList.AddItem(fmt.Sprintf("Cannot read directory: %v", err), "", 0, nil)
 		a.switchPage("filebrowser", a.fileList)
 		return
 	}
@@ -124,7 +124,7 @@ func (a *App) browseDir(dir string) {
 
 	a.fileList.Clear()
 	if len(a.fileEntries) == 0 {
-		a.fileList.AddItem("(空目录)", "", 0, nil)
+		a.fileList.AddItem("(Empty directory)", "", 0, nil)
 	} else {
 		for _, e := range a.fileEntries {
 			a.fileList.AddItem(e.name, "", 0, nil)

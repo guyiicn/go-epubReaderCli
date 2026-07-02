@@ -17,7 +17,7 @@ func (a *App) setupBookmarks() {
 		SetMainTextColor(tcell.ColorDefault).
 		SetSelectedTextColor(tcell.ColorDefault).
 		SetSelectedBackgroundColor(tcell.ColorDarkCyan)
-	a.bmList.SetBorder(true).SetTitle(" 书签 ")
+	a.bmList.SetBorder(true).SetTitle(" Bookmarks ")
 
 	a.bmList.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
 		bms, _ := a.store.LoadBookmarks(a.bookPath)
@@ -51,17 +51,17 @@ func (a *App) buildBookmarksList() {
 	a.bmList.Clear()
 	bms, _ := a.store.LoadBookmarks(a.bookPath)
 	if len(bms) == 0 {
-		a.bmList.AddItem("(无书签)", "按 [a] 添加书签", 0, nil)
+		a.bmList.AddItem("(No bookmarks)", "Press [a] to add a bookmark", 0, nil)
 		return
 	}
 	for _, bm := range bms {
-		title := "(未知章节)"
+		title := "(Unknown chapter)"
 		if bm.SectionIndex >= 0 && bm.SectionIndex < len(a.book.Sections) {
 			title = a.book.Sections[bm.SectionIndex].Title
 		}
 		note := bm.Note
 		if note == "" {
-			note = fmt.Sprintf("行 %d", bm.LinePos)
+			note = fmt.Sprintf("Line %d", bm.LinePos)
 		}
 		timeStr := bm.CreatedAt.Format("2006-01-02 15:04")
 		a.bmList.AddItem(
@@ -94,7 +94,7 @@ func (a *App) doAddBookmark(note string) {
 		CreatedAt:    time.Now(),
 	})
 	a.store.SaveBookmarks(a.bookPath, bms)
-	a.updateReaderStatus("书签已添加")
+	a.updateReaderStatus("Bookmark added")
 }
 
 func (a *App) deleteBookmark() {
@@ -104,7 +104,7 @@ func (a *App) deleteBookmark() {
 		return
 	}
 	// Confirm deletion — use a modal
-	a.showDeleteConfirm(fmt.Sprintf("删除书签 \"%s\"?", bms[idx].Note), func() {
+	a.showDeleteConfirm(fmt.Sprintf("Delete bookmark \"%s\"?", bms[idx].Note), func() {
 		a.store.DeleteBookmark(a.bookPath, bms[idx].ID)
 		a.buildBookmarksList()
 	})
@@ -113,7 +113,7 @@ func (a *App) deleteBookmark() {
 func (a *App) showDeleteConfirm(msg string, onConfirm func()) {
 	modal := tview.NewModal().
 		SetText(msg).
-		AddButtons([]string{"取消", "删除"}).
+		AddButtons([]string{"Cancel", "Delete"}).
 		SetFocus(0)
 	modal.SetDoneFunc(func(idx int, _ string) {
 		if idx == 1 {
@@ -163,8 +163,8 @@ func (a *App) doAddAnnotation(note string) {
 		selected = selected[:500]
 	}
 	if err := a.store.AddAnnotation(a.bookPath, selected, note, a.sectionIdx, a.scrollPos); err != nil {
-		a.updateReaderStatus(fmt.Sprintf("标注失败: %v", err))
+		a.updateReaderStatus(fmt.Sprintf("Annotation failed: %v", err))
 		return
 	}
-	a.updateReaderStatus("当前位置笔记已添加")
+	a.updateReaderStatus("Note added at current position")
 }

@@ -15,10 +15,15 @@ import (
 	"github.com/rivo/tview"
 )
 
+const (
+	libraryTitleText  = "[::b]epub-reader - Library[::-]"
+	libraryStatusHelp = "[Enter] Open  [a] Add  [f] Find  [s] Sync  [d] Delete  [h] Help  [q] Quit"
+)
+
 func (a *App) setupLibrary() {
 	a.libTitle = tview.NewTextView().
 		SetDynamicColors(true).
-		SetText("[::b]epub-reader — 书库[::-]")
+		SetText(libraryTitleText)
 
 	a.libList = tview.NewList().
 		ShowSecondaryText(true)
@@ -35,18 +40,16 @@ func (a *App) setupLibrary() {
 		a.openLibraryEntry(a.library[idx])
 	})
 
-	statusText := "[Enter]打开 [a]添加 [s]同步 [d]删除 [h]帮助 [q]退出"
-
-	statusBar := tview.NewTextView().
+	a.libStatus = tview.NewTextView().
 		SetDynamicColors(true).
-		SetText(statusText).
+		SetText(libraryStatusHelp).
 		SetTextAlign(tview.AlignCenter)
 
 	a.libFlex = tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(a.libTitle, 1, 0, false).
 		AddItem(a.libList, 0, 1, true).
-		AddItem(statusBar, 1, 0, false)
+		AddItem(a.libStatus, 1, 0, false)
 }
 
 func (a *App) refreshLibrary() {
@@ -63,7 +66,7 @@ func (a *App) refreshLibrary() {
 	}
 
 	if len(a.library) == 0 {
-		a.libList.AddItem("按 [a] 添加第一本书", "", 0, nil)
+		a.libList.AddItem("No books. Press [a] to add one.", "", 0, nil)
 		return
 	}
 
@@ -95,9 +98,9 @@ func (a *App) refreshLibrary() {
 
 		// Check if file exists
 		if entry.RemoteOnly {
-			mainText = "[远端] " + mainText
+			mainText = "[Remote] " + mainText
 		} else if _, err := os.Stat(entry.Path); err != nil {
-			mainText = "[文件缺失] " + mainText
+			mainText = "[Missing file] " + mainText
 		}
 
 		a.libList.AddItem(mainText, secondary, 0, nil)
@@ -112,7 +115,7 @@ func (a *App) loadProgressPercent(path string) float64 {
 	return p.Percent
 }
 
-// library.go 中的 showAddBook 已移到 filebrowser.go
+// showAddBook lives in filebrowser.go.
 
 func (a *App) addBookByPath(path string) {
 	// Expand ~
@@ -123,14 +126,14 @@ func (a *App) addBookByPath(path string) {
 
 	// Check file exists
 	if _, err := os.Stat(path); err != nil {
-		a.showError(fmt.Sprintf("文件不存在: %s", path))
+		a.showError(fmt.Sprintf("File not found: %s", path))
 		return
 	}
 
 	// Parse to get metadata
 	book, err := epub.Load(path)
 	if err != nil {
-		a.showError(fmt.Sprintf("无法打开: %v", err))
+		a.showError(fmt.Sprintf("Open failed: %v", err))
 		return
 	}
 
@@ -140,7 +143,7 @@ func (a *App) addBookByPath(path string) {
 	}
 
 	if err := a.store.AddBook(path, title, book.Author); err != nil {
-		a.showError(fmt.Sprintf("添加失败: %v", err))
+		a.showError(fmt.Sprintf("Add failed: %v", err))
 		return
 	}
 
@@ -156,13 +159,13 @@ func (a *App) removeBook() {
 	}
 	entry := a.library[idx]
 	if entry.RemoteOnly || entry.Path == "" {
-		a.showError("远端书籍需要先用命令行 download 下载")
+		a.showError("Remote books can be opened with [Enter] to download first.")
 		return
 	}
-	msg := fmt.Sprintf("从书库删除 \"%s\"?", entry.Title)
+	msg := fmt.Sprintf("Remove \"%s\" from the library?", entry.Title)
 	modal := tview.NewModal().
 		SetText(msg).
-		AddButtons([]string{"取消", "删除"}).
+		AddButtons([]string{"Cancel", "Delete"}).
 		SetFocus(0)
 	modal.SetDoneFunc(func(buttonIdx int, _ string) {
 		if buttonIdx == 1 {
@@ -187,19 +190,19 @@ func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
 		serverID = entry.ID
 	}
 	if serverID == "" {
-		a.showError("远端书籍缺少 server id")
+		a.showError("Remote book is missing a server id.")
 		return
 	}
-	a.libTitle.SetText("[yellow]下载远端书籍...[::-]")
+	a.setLibraryStatus("Downloading remote book: " + entry.Title)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		auth, _ := a.store.AuthState()
 		client, err := server.NewClient(auth.ServerURL, a.store)
 		var dst string
+		var n int64
 		if err == nil {
 			dst = a.store.BookStoragePath(entry.ContentHash, serverID, entry.Format)
-			var n int64
 			n, err = client.DownloadBookFile(ctx, serverID, dst)
 			if err == nil {
 				err = a.store.MarkDownloaded(serverID, dst, entry.ContentHash, n)
@@ -207,9 +210,10 @@ func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
 		}
 		a.tapp.QueueUpdateDraw(func() {
 			if err != nil {
-				a.showError(fmt.Sprintf("下载失败: %v", err))
+				a.showError(fmt.Sprintf("Download failed: %v", err))
 				return
 			}
+			a.setLibraryStatus(fmt.Sprintf("Download complete: %d bytes. Opening...", n))
 			a.refreshLibrary()
 			a.openBookByPath(dst)
 		})
@@ -218,36 +222,63 @@ func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
 
 func (a *App) showError(msg string) {
 	a.libTitle.SetText(fmt.Sprintf("[red]%s[::-]", msg))
+	if a.libStatus != nil {
+		a.libStatus.SetText(fmt.Sprintf("[red]%s[::-]  |  %s", msg, libraryStatusHelp))
+	}
 	go func() {
 		time.Sleep(3 * time.Second)
 		a.tapp.QueueUpdateDraw(func() {
-			a.libTitle.SetText("[::b]epub-reader — 书库[::-]")
+			a.libTitle.SetText(libraryTitleText)
+			if a.libStatus != nil {
+				a.libStatus.SetText(libraryStatusHelp)
+			}
 		})
 	}()
 }
 
+func (a *App) setLibraryStatus(msg string) {
+	a.libTitle.SetText(fmt.Sprintf("[yellow]%s[::-]", msg))
+	if a.libStatus != nil {
+		a.libStatus.SetText(fmt.Sprintf("[yellow]%s[::-]  |  %s", msg, libraryStatusHelp))
+	}
+}
+
 func (a *App) syncNow() {
+	a.syncNowWithStatus(func(msg string) {
+		a.tapp.QueueUpdateDraw(func() {
+			a.setLibraryStatus(msg)
+		})
+	})
+}
+
+func (a *App) syncNowFromUI() {
+	a.syncNowWithStatus(a.setLibraryStatus)
+}
+
+func (a *App) syncNowWithStatus(setStatus func(string)) {
 	a.syncMu.Lock()
 	if a.syncRunning {
 		a.syncPending = true
 		a.syncMu.Unlock()
+		setStatus("Sync already running; queued another sync.")
 		return
 	}
 	a.syncRunning = true
 	a.syncMu.Unlock()
 
-	a.tapp.QueueUpdateDraw(func() {
-		a.libTitle.SetText("[yellow]同步中...[::-]")
-	})
+	setStatus("Syncing with server...")
 
 	go func() {
 		for {
 			err := a.performSyncOnce()
 			a.tapp.QueueUpdateDraw(func() {
 				if err != nil {
-					a.showError(fmt.Sprintf("同步失败: %v", err))
+					a.showError(fmt.Sprintf("Sync failed: %v", err))
 				} else {
-					a.libTitle.SetText("[green]同步完成[::-]")
+					a.libTitle.SetText("[green]Sync complete[::-]")
+					if a.libStatus != nil {
+						a.libStatus.SetText("[green]Sync complete. Library metadata refreshed.[::-]  |  " + libraryStatusHelp)
+					}
 					a.refreshLibrary()
 				}
 			})
@@ -278,7 +309,7 @@ func (a *App) performSyncOnce() error {
 			time.Sleep(2 * time.Second)
 			a.tapp.QueueUpdateDraw(func() {
 				if a.mode == ModeLibrary {
-					a.libTitle.SetText("[::b]epub-reader — 书库[::-]")
+					a.libTitle.SetText(libraryTitleText)
 				}
 			})
 		}()
@@ -301,7 +332,7 @@ func (a *App) startRealtimeSync() {
 					for msg := range ch {
 						if msg.Table != "" {
 							a.tapp.QueueUpdateDraw(func() {
-								a.libTitle.SetText("[yellow]收到远端更新，正在同步...[::-]")
+								a.setLibraryStatus("Remote update received; syncing...")
 							})
 							a.syncNow()
 						}

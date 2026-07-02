@@ -35,12 +35,12 @@ func (a *App) setupReader() {
 
 func (a *App) openBookByPath(path string) {
 	if path == "" {
-		a.showError("远端书籍需要先下载")
+		a.showError("Remote book must be downloaded first.")
 		return
 	}
 	book, err := epub.Load(path)
 	if err != nil {
-		a.showError(fmt.Sprintf("无法打开: %v", err))
+		a.showError(fmt.Sprintf("Open failed: %v", err))
 		return
 	}
 
@@ -181,8 +181,8 @@ func (a *App) updateReaderDisplay() {
 	totalLines := len(a.lines)
 
 	if totalLines == 0 {
-		a.readerView.SetText("(此章节为空)")
-		a.statusView.SetText(fmt.Sprintf(" Ch%d/%d %s │ 空 │ %s ",
+		a.readerView.SetText("(This section is empty)")
+		a.statusView.SetText(fmt.Sprintf(" Ch%d/%d %s | Empty | %s ",
 			a.sectionIdx+1, len(a.book.Sections), section.Title,
 			time.Now().Format("15:04")))
 		return
@@ -224,15 +224,15 @@ func (a *App) updateReaderDisplay() {
 	bar := progressBar(pct / 100)
 	now := time.Now().Format("15:04")
 
-	colInfo := "单栏"
+	colInfo := "Single column"
 	if a.columns == 2 {
-		colInfo = "双栏"
+		colInfo = "Two columns"
 	}
 
 	tp := a.totalPages()
 	cp := a.currentPage() + 1
 
-	status := fmt.Sprintf(" Ch%d/%d %s │ %d/%d页 │ %s %d%% │ %s │ %s ",
+	status := fmt.Sprintf(" Ch%d/%d %s | Page %d/%d | %s %d%% | %s | %s ",
 		a.sectionIdx+1, len(a.book.Sections),
 		section.Title,
 		cp, tp,

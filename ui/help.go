@@ -12,7 +12,7 @@ func (a *App) setupHelp() {
 	tv := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true)
-	tv.SetBorder(true).SetTitle(" 帮助 (h/ESC 关闭) ")
+	tv.SetBorder(true).SetTitle(" Help (h/Esc Close) ")
 	a.helpView = tv
 }
 
@@ -51,51 +51,51 @@ func (a *App) closeHelp() {
 
 func (a *App) buildHelpText() {
 	helpText := strings.Join([]string{
-		"[::b]epub-reader 快捷键[::-]",
+		"[::b]epub-reader Shortcuts[::-]",
 		"",
-		"[::b]全局[::-]",
-		"  h         帮助(任何界面)",
-		"  Esc       返回/关闭",
-		"  Ctrl+C    强制退出",
+		"[::b]Global[::-]",
+		"  h         Help (from non-input screens)",
+		"  Esc       Back / Close",
+		"  Ctrl+C    Force quit",
 		"",
-		"[::b]书库模式[::-]",
-		"  j/↓       下一本",
-		"  k/↑       上一本",
-		"  Enter     打开书籍",
-		"  a         添加书籍(文件浏览器)",
-		"  f         找书并加入服务器书库",
-		"  s         同步",
-		"  d         删除书籍(有确认)",
-		"  q         退出程序",
+		"[::b]Library[::-]",
+		"  j/Down    Next book",
+		"  k/Up      Previous book",
+		"  Enter     Open book; download first for remote books",
+		"  a         Add book (file browser)",
+		"  f         Find a book and add it to the server library",
+		"  s         Sync",
+		"  d         Delete book (with confirmation)",
+		"  q         Quit",
 		"",
-		"[::b]阅读模式[::-]",
-		"  ←/Sp/PgDn  下一页(跨章节)",
-		"  →/Bs/PgUp  上一页(跨章节)",
-		"  g         章节开头",
-		"  e         章节末尾",
-		"  n         下一章",
-		"  p         上一章",
-		"  t         目录弹窗",
-		"  b         书签列表",
-		"  a         添加书签(可输入备注)",
-		"  m         添加当前位置笔记/标注",
-		"  i         书籍信息",
-		"  c         切换单栏/双栏",
-		"  /         搜索当前章节",
-		"  x         全书搜索",
-		"  .         下一个搜索结果",
-		"  o/q/Esc   返回书库",
+		"[::b]Reader[::-]",
+		"  Right/Sp/PgDn  Next page (crosses chapters)",
+		"  Left/Bs/PgUp   Previous page (crosses chapters)",
+		"  g         Chapter start",
+		"  e         Chapter end",
+		"  n         Next chapter",
+		"  p         Previous chapter",
+		"  t         Table of contents",
+		"  b         Bookmarks",
+		"  a         Add bookmark (optional note)",
+		"  m         Add note/annotation at current position",
+		"  i         Book info",
+		"  c         Toggle single/two-column layout",
+		"  /         Search current chapter",
+		"  x         Search full book",
+		"  .         Next search result",
+		"  o/q/Esc   Back to library",
 		"",
-		"[::b]文件浏览器[::-]",
-		"  j/k/↑/↓   移动",
-		"  Enter     进入目录/选择文件",
-		"  Esc       取消返回书库",
+		"[::b]File Browser[::-]",
+		"  j/k/Up/Down  Move",
+		"  Enter        Open directory / Select file",
+		"  Esc          Cancel and return to library",
 		"",
-		"[::b]弹窗通用 (目录/书签/帮助/信息)[::-]",
-		"  j/k/↑/↓   上下移动",
-		"  Enter     跳转/确认",
-		"  d         删除(书签列表, 有确认)",
-		"  Esc       关闭弹窗",
+		"[::b]Popups (TOC / Bookmarks / Help / Info)[::-]",
+		"  j/k/Up/Down  Move",
+		"  Enter        Jump / Confirm",
+		"  d            Delete (bookmarks, with confirmation)",
+		"  Esc          Close popup",
 	}, "\n")
 
 	a.helpView.SetText(helpText)
@@ -107,7 +107,7 @@ func (a *App) setupInfo() {
 	tv := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true)
-	tv.SetBorder(true).SetTitle(" 书籍信息 (i/ESC 关闭) ")
+	tv.SetBorder(true).SetTitle(" Book Info (i/Esc Close) ")
 	a.infoView = tv
 }
 
@@ -119,34 +119,34 @@ func (a *App) showInfo() {
 
 	m := a.book.Meta
 	var sb strings.Builder
-	sb.WriteString("[::b]书籍信息[::-]\n\n")
+	sb.WriteString("[::b]Book Info[::-]\n\n")
 	if m.Title != "" {
-		sb.WriteString(fmt.Sprintf("  书名: %s\n", m.Title))
+		sb.WriteString(fmt.Sprintf("  Title: %s\n", m.Title))
 	}
 	if m.Author != "" {
-		sb.WriteString(fmt.Sprintf("  作者: %s\n", m.Author))
+		sb.WriteString(fmt.Sprintf("  Author: %s\n", m.Author))
 	}
 	if m.Language != "" {
-		sb.WriteString(fmt.Sprintf("  语言: %s\n", m.Language))
+		sb.WriteString(fmt.Sprintf("  Language: %s\n", m.Language))
 	}
 	if m.Publisher != "" {
-		sb.WriteString(fmt.Sprintf("  出版社: %s\n", m.Publisher))
+		sb.WriteString(fmt.Sprintf("  Publisher: %s\n", m.Publisher))
 	}
 	if m.Date != "" {
-		sb.WriteString(fmt.Sprintf("  日期: %s\n", m.Date))
+		sb.WriteString(fmt.Sprintf("  Date: %s\n", m.Date))
 	}
 	if m.Description != "" {
-		sb.WriteString(fmt.Sprintf("\n  简介:\n  %s\n", m.Description))
+		sb.WriteString(fmt.Sprintf("\n  Description:\n  %s\n", m.Description))
 	}
-	sb.WriteString(fmt.Sprintf("\n  章节数: %d\n", len(a.book.Sections)))
+	sb.WriteString(fmt.Sprintf("\n  Chapters: %d\n", len(a.book.Sections)))
 
 	totalChars := 0
 	for _, s := range a.book.Sections {
 		totalChars += len(s.HTML)
 	}
-	sb.WriteString(fmt.Sprintf("  总字数(约): %d\n", totalChars/2))
+	sb.WriteString(fmt.Sprintf("  Approx. characters: %d\n", totalChars/2))
 
-	sb.WriteString(fmt.Sprintf("\n  文件: %s\n", a.bookPath))
+	sb.WriteString(fmt.Sprintf("\n  File: %s\n", a.bookPath))
 
 	a.infoView.SetText(sb.String())
 	a.switchPage("info", a.infoView)
@@ -161,9 +161,9 @@ func (a *App) closeInfo() {
 
 func (a *App) setupBookmarkNote() {
 	input := tview.NewInputField().
-		SetLabel("备注: ").
+		SetLabel("Note: ").
 		SetFieldWidth(40)
-	input.SetBorder(true).SetTitle(" 添加书签 ")
+	input.SetBorder(true).SetTitle(" Add Bookmark ")
 
 	input.SetDoneFunc(func(key tcell.Key) {
 		switch key {
@@ -182,9 +182,9 @@ func (a *App) setupBookmarkNote() {
 
 func (a *App) setupAnnotationNote() {
 	input := tview.NewInputField().
-		SetLabel("笔记: ").
+		SetLabel("Note: ").
 		SetFieldWidth(50)
-	input.SetBorder(true).SetTitle(" 添加当前位置笔记 ")
+	input.SetBorder(true).SetTitle(" Add Note at Current Position ")
 
 	input.SetDoneFunc(func(key tcell.Key) {
 		switch key {
@@ -217,9 +217,9 @@ func (a *App) showBookmarkNoteInput() {
 
 func (a *App) setupSearch() {
 	input := tview.NewInputField().
-		SetLabel("搜索: ").
+		SetLabel("Search: ").
 		SetFieldWidth(40)
-	input.SetBorder(true).SetTitle(" 搜索 ")
+	input.SetBorder(true).SetTitle(" Search ")
 	input.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
@@ -239,7 +239,7 @@ func (a *App) setupSearch() {
 		SetMainTextColor(tcell.ColorDefault).
 		SetSelectedTextColor(tcell.ColorDefault).
 		SetSelectedBackgroundColor(tcell.ColorDarkCyan)
-	a.searchResults.SetBorder(true).SetTitle(" 搜索结果 ")
+	a.searchResults.SetBorder(true).SetTitle(" Search Results ")
 	a.searchResults.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
 		if idx >= len(a.searchAllResults) {
 			return
@@ -256,14 +256,14 @@ func (a *App) setupSearch() {
 
 func (a *App) showSearch() {
 	a.mode = ModeSearch
-	a.searchInput.SetBorder(true).SetTitle(" 搜索当前章节 ")
+	a.searchInput.SetBorder(true).SetTitle(" Search Current Chapter ")
 	a.searchInput.SetText("")
 	a.switchPage("search", a.searchInput)
 }
 
 func (a *App) showSearchAll() {
 	a.mode = ModeSearch
-	a.searchInput.SetBorder(true).SetTitle(" 全书搜索 ")
+	a.searchInput.SetBorder(true).SetTitle(" Search Full Book ")
 	a.searchInput.SetText("")
 	a.switchPage("search", a.searchInput)
 }
@@ -297,7 +297,7 @@ func (a *App) executeSearch() {
 	}
 
 	if len(a.searchMatches) == 0 {
-		a.updateReaderStatus("未找到: " + a.searchTerm)
+		a.updateReaderStatus("Not found: " + a.searchTerm)
 		a.mode = ModeReader
 		a.switchPage("reader", a.readerView)
 		return
@@ -307,7 +307,7 @@ func (a *App) executeSearch() {
 	a.mode = ModeReader
 	a.switchPage("reader", a.readerView)
 	a.updateReaderDisplay()
-	a.updateReaderStatus(fmt.Sprintf("找到 %d 处匹配", len(a.searchMatches)))
+	a.updateReaderStatus(fmt.Sprintf("Found %d matches", len(a.searchMatches)))
 }
 
 func (a *App) executeSearchAll(term string) {
@@ -329,7 +329,7 @@ func (a *App) executeSearchAll(term string) {
 	}
 
 	if len(a.searchAllResults) == 0 {
-		a.updateReaderStatus("全书未找到: " + a.searchTerm)
+		a.updateReaderStatus("Not found in book: " + a.searchTerm)
 		a.mode = ModeReader
 		a.switchPage("reader", a.readerView)
 		return
@@ -343,13 +343,13 @@ func (a *App) executeSearchAll(term string) {
 		}
 		a.searchResults.AddItem(
 			fmt.Sprintf("%s: %s", title, truncate(r.line, 60)),
-			fmt.Sprintf("行%d", r.linePos),
+			fmt.Sprintf("Line %d", r.linePos),
 			0, nil,
 		)
 	}
 
 	a.mode = ModeSearchResults
-	a.searchResults.SetTitle(fmt.Sprintf(" 搜索结果 (%d) ", len(a.searchAllResults)))
+	a.searchResults.SetTitle(fmt.Sprintf(" Search Results (%d) ", len(a.searchAllResults)))
 	a.switchPage("searchresults", a.searchResults)
 }
 
@@ -374,7 +374,7 @@ func (a *App) nextSearchMatch() {
 	}
 	a.scrollPos = a.searchMatches[0]
 	a.updateReaderDisplay()
-	a.updateReaderStatus("搜索回到开头")
+	a.updateReaderStatus("Search wrapped to the start")
 }
 
 func (a *App) closeSearchResults() {

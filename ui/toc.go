@@ -15,7 +15,7 @@ func (a *App) setupTOC() {
 		SetMainTextColor(tcell.ColorDefault).
 		SetSelectedTextColor(tcell.ColorDefault).
 		SetSelectedBackgroundColor(tcell.ColorDarkCyan)
-	a.tocList.SetBorder(true).SetTitle(" 目录 ")
+	a.tocList.SetBorder(true).SetTitle(" Table of Contents ")
 
 	a.tocList.SetSelectedFunc(func(idx int, _ string, _ string, _ rune) {
 		if a.book == nil {
