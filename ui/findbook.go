@@ -109,10 +109,7 @@ func (a *App) downloadFoundBook(book server.SearchBook) {
 			a.refreshLibrary()
 			a.mode = ModeLibrary
 			a.switchPage("library", a.libList)
-			a.libTitle.SetText("[green]Added to library[::-]")
-			if a.libStatus != nil {
-				a.libStatus.SetText("[green]Added to library. Press [Enter] to download and open.[::-]  |  " + libraryStatusHelp)
-			}
+			a.setLibrarySuccessStatus("Added to library. Press [Enter] to download and open.")
 		})
 	}()
 }

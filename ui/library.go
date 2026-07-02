@@ -42,7 +42,7 @@ func (a *App) setupLibrary() {
 
 	a.libStatus = tview.NewTextView().
 		SetDynamicColors(true).
-		SetText(libraryStatusHelp).
+		SetText(a.libraryStatusText("")).
 		SetTextAlign(tview.AlignCenter)
 
 	a.libFlex = tview.NewFlex().
@@ -55,6 +55,9 @@ func (a *App) setupLibrary() {
 func (a *App) refreshLibrary() {
 	a.library = a.store.Library()
 	a.libList.Clear()
+	if a.libStatus != nil {
+		a.libStatus.SetText(a.libraryStatusText(""))
+	}
 
 	// Sort by LastOpened (most recent first)
 	for i := 0; i < len(a.library); i++ {
@@ -213,8 +216,8 @@ func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
 				a.showError(fmt.Sprintf("Download failed: %v", err))
 				return
 			}
-			a.setLibraryStatus(fmt.Sprintf("Download complete: %d bytes. Opening...", n))
 			a.refreshLibrary()
+			a.setLibrarySuccessStatus(fmt.Sprintf("Download complete: %d bytes. Opening...", n))
 			a.openBookByPath(dst)
 		})
 	}()
@@ -223,14 +226,14 @@ func (a *App) openLibraryEntry(entry epub.LibraryEntry) {
 func (a *App) showError(msg string) {
 	a.libTitle.SetText(fmt.Sprintf("[red]%s[::-]", msg))
 	if a.libStatus != nil {
-		a.libStatus.SetText(fmt.Sprintf("[red]%s[::-]  |  %s", msg, libraryStatusHelp))
+		a.libStatus.SetText(a.libraryStatusText(fmt.Sprintf("[red]%s[::-]", msg)))
 	}
 	go func() {
 		time.Sleep(3 * time.Second)
 		a.tapp.QueueUpdateDraw(func() {
 			a.libTitle.SetText(libraryTitleText)
 			if a.libStatus != nil {
-				a.libStatus.SetText(libraryStatusHelp)
+				a.libStatus.SetText(a.libraryStatusText(""))
 			}
 		})
 	}()
@@ -239,8 +242,44 @@ func (a *App) showError(msg string) {
 func (a *App) setLibraryStatus(msg string) {
 	a.libTitle.SetText(fmt.Sprintf("[yellow]%s[::-]", msg))
 	if a.libStatus != nil {
-		a.libStatus.SetText(fmt.Sprintf("[yellow]%s[::-]  |  %s", msg, libraryStatusHelp))
+		a.libStatus.SetText(a.libraryStatusText(fmt.Sprintf("[yellow]%s[::-]", msg)))
 	}
+}
+
+func (a *App) setLibrarySuccessStatus(msg string) {
+	a.libTitle.SetText(fmt.Sprintf("[green]%s[::-]", msg))
+	if a.libStatus != nil {
+		a.libStatus.SetText(a.libraryStatusText(fmt.Sprintf("[green]%s[::-]", msg)))
+	}
+}
+
+func (a *App) libraryStatusText(activity string) string {
+	parts := []string{a.authStatusText(), libraryStatusHelp}
+	if activity != "" {
+		parts = append([]string{activity}, parts...)
+	}
+	return strings.Join(parts, "  |  ")
+}
+
+func (a *App) authStatusText() string {
+	auth, err := a.store.AuthState()
+	if err != nil {
+		return "[red]Auth: unavailable[::-]"
+	}
+	if auth.ServerURL == "" {
+		return "[red]Auth: not configured[::-]"
+	}
+	if auth.AccessToken == "" || auth.RefreshToken == "" {
+		return fmt.Sprintf("[red]Auth: not signed in[::-] %s", auth.ServerURL)
+	}
+	if auth.AccessTokenExpiresAt > 0 && auth.AccessTokenExpiresAt <= time.Now().Unix() {
+		return fmt.Sprintf("[yellow]Auth: token expired[::-] %s", auth.ServerURL)
+	}
+	user := auth.UserID
+	if user == "" {
+		user = "signed in"
+	}
+	return fmt.Sprintf("[green]Auth: signed in[::-] %s @ %s", user, auth.ServerURL)
 }
 
 func (a *App) syncNow() {
@@ -275,11 +314,8 @@ func (a *App) syncNowWithStatus(setStatus func(string)) {
 				if err != nil {
 					a.showError(fmt.Sprintf("Sync failed: %v", err))
 				} else {
-					a.libTitle.SetText("[green]Sync complete[::-]")
-					if a.libStatus != nil {
-						a.libStatus.SetText("[green]Sync complete. Library metadata refreshed.[::-]  |  " + libraryStatusHelp)
-					}
 					a.refreshLibrary()
+					a.setLibrarySuccessStatus("Sync complete. Library metadata refreshed.")
 				}
 			})
 
