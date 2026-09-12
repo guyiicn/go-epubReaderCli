@@ -745,7 +745,13 @@ func (s *Store) AddBook(path, title, author string) error {
 			file_size=excluded.file_size,
 			updated_at=excluded.updated_at,
 			last_read_at=excluded.last_read_at,
-			remote_only=0`,
+			remote_only=0,
+			-- Importing a file again is how a user asks for a book back. The
+			-- lookup above only matches live rows, so a deleted one lands here;
+			-- without clearing the tombstone the import silently does nothing.
+			-- dirty=1 so the restore reaches the server too.
+			deleted_at=NULL,
+			dirty=1`,
 		id, nullEmpty(hash), title, author, format, format, path, size, now, now, now, 0, 1, readableFormat(format))
 	if err != nil {
 		return fmt.Errorf("add book: %w", err)
