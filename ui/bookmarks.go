@@ -25,8 +25,12 @@ func (a *App) setupBookmarks() {
 			return
 		}
 		bm := bms[idx]
-		a.sectionIdx = bm.SectionIndex
-		a.scrollPos = bm.LinePos
+		// A bookmark written by another client carries only a locator; its
+		// section/line columns are 0 until resolved against this book.
+		t := resolveLocator(a.book, bm.Locator, bm.SectionIndex, bm.LinePos, bm.Percent)
+		a.sectionIdx = t.SectionIdx
+		a.scrollPos = t.LinePos
+		a.pendingLineFrac = t.LineFrac
 		a.cachedSection = -1
 		a.renderCurrentSection()
 		a.closeBookmarks()
@@ -56,8 +60,9 @@ func (a *App) buildBookmarksList() {
 	}
 	for _, bm := range bms {
 		title := "(Unknown chapter)"
-		if bm.SectionIndex >= 0 && bm.SectionIndex < len(a.book.Sections) {
-			title = a.book.Sections[bm.SectionIndex].Title
+		sectionIdx := resolveLocator(a.book, bm.Locator, bm.SectionIndex, bm.LinePos, bm.Percent).SectionIdx
+		if sectionIdx >= 0 && sectionIdx < len(a.book.Sections) {
+			title = a.book.Sections[sectionIdx].Title
 		}
 		note := bm.Note
 		if note == "" {
@@ -86,10 +91,15 @@ func (a *App) doAddBookmark(note string) {
 		return
 	}
 	bms, _ := a.store.LoadBookmarks(a.bookPath)
+	href, title, progression, percent := a.currentPos()
 	bms = append(bms, epub.Bookmark{
 		ID:           fmt.Sprintf("bm-%d", time.Now().UnixNano()),
 		SectionIndex: a.sectionIdx,
 		LinePos:      a.scrollPos,
+		Href:         href,
+		Title:        title,
+		Progression:  progression,
+		Percent:      percent,
 		Note:         note,
 		CreatedAt:    time.Now(),
 	})
@@ -162,7 +172,17 @@ func (a *App) doAddAnnotation(note string) {
 	if len(selected) > 500 {
 		selected = selected[:500]
 	}
-	if err := a.store.AddAnnotation(a.bookPath, selected, note, a.sectionIdx, a.scrollPos); err != nil {
+	href, title, progression, percent := a.currentPos()
+	if err := a.store.AddAnnotation(a.bookPath, epub.Annotation{
+		SelectedText: selected,
+		Note:         note,
+		SectionIndex: a.sectionIdx,
+		LinePos:      a.scrollPos,
+		Href:         href,
+		Title:        title,
+		Progression:  progression,
+		Percent:      percent,
+	}); err != nil {
 		a.updateReaderStatus(fmt.Sprintf("Annotation failed: %v", err))
 		return
 	}

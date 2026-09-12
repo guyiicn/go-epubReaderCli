@@ -114,17 +114,3 @@ func clamp01(v float64) float64 {
 	}
 	return v
 }
-
-// legacyLocator emits the CLI 1.x shape. Bookmarks and annotations still use
-// it because epub.Bookmark carries no chapter href to build a shared locator
-// from; progress already writes the shared format.
-func legacyLocator(sectionIndex, linePos int) string {
-	b, err := json.Marshal(struct {
-		SectionIndex int `json:"sectionIndex"`
-		LinePos      int `json:"linePos"`
-	}{sectionIndex, linePos})
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}

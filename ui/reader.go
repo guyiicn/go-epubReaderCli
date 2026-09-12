@@ -76,44 +76,54 @@ func (a *App) openBookByPath(path string) {
 	a.switchPage("reader", a.readerView)
 }
 
-// restoreProgress positions the reader from a stored locator, walking the
-// fallback ladder in contracts/LOCATOR.md. The CLI renders plain text and
-// cannot resolve a CFI, so rung 1 is skipped. Line offsets depend on the
-// rendered line count, which is only known after renderCurrentSection, so a
-// within-chapter fraction is parked in pendingLineFrac and applied there.
-func (a *App) restoreProgress(book *epub.Book, p *epub.Progress) {
-	loc := store.ParseLocator(p.Locator)
+// locatorTarget is a stored position resolved against an open book. LineFrac
+// >= 0 means the offset is a within-chapter fraction that can only become a
+// line number once the chapter is rendered; otherwise LinePos is exact.
+type locatorTarget struct {
+	SectionIdx int
+	LinePos    int
+	LineFrac   float64
+}
+
+// resolveLocator walks the fallback ladder in contracts/LOCATOR.md, shared by
+// progress and bookmarks. Rung 1 (CFI) is skipped: the CLI renders plain text
+// and has no DOM to resolve one against. ownSection/ownLine are this client's
+// own exact columns and ownPercent its whole-book fraction, used when the
+// locator itself carries nothing usable.
+func resolveLocator(book *epub.Book, rawLocator string, ownSection, ownLine int, ownPercent float64) locatorTarget {
+	t := locatorTarget{LineFrac: -1}
+	loc := store.ParseLocator(rawLocator)
 
 	// Rung 2: href identifies the chapter, progression the offset inside it.
 	if idx := book.SectionIndexByHref(loc.Href); idx >= 0 {
-		a.sectionIdx = idx
+		t.SectionIdx = idx
 		if loc.HasProgression {
-			a.pendingLineFrac = loc.Progression
+			t.LineFrac = loc.Progression
 		}
-		return
+		return t
 	}
 
 	// Rung 4: the legacy shape carries an exact section/line pair.
 	if loc.HasLegacy && loc.SectionIndex >= 0 && loc.SectionIndex < len(book.Sections) {
-		a.sectionIdx = loc.SectionIndex
-		a.scrollPos = loc.LinePos
-		return
+		t.SectionIdx = loc.SectionIndex
+		t.LinePos = loc.LinePos
+		return t
 	}
 
 	// Rows written before this client emitted locators still have an exact
 	// local position in their own columns; prefer it over a percentage guess.
-	if p.SectionIndex > 0 || p.LinePos > 0 {
-		if p.SectionIndex >= 0 && p.SectionIndex < len(book.Sections) {
-			a.sectionIdx = p.SectionIndex
-			a.scrollPos = p.LinePos
-			return
+	if ownSection > 0 || ownLine > 0 {
+		if ownSection >= 0 && ownSection < len(book.Sections) {
+			t.SectionIdx = ownSection
+			t.LinePos = ownLine
+			return t
 		}
 	}
 
 	// Rung 3: whole-book percentage, split into chapter + offset within it.
 	total := loc.TotalProgression
 	if !loc.HasTotal {
-		total = p.Percent
+		total = ownPercent
 	}
 	if total > 0 && len(book.Sections) > 0 {
 		scaled := total * float64(len(book.Sections))
@@ -121,9 +131,21 @@ func (a *App) restoreProgress(book *epub.Book, p *epub.Progress) {
 		if idx >= len(book.Sections) {
 			idx = len(book.Sections) - 1
 		}
-		a.sectionIdx = idx
-		a.pendingLineFrac = scaled - float64(idx)
+		t.SectionIdx = idx
+		t.LineFrac = scaled - float64(idx)
 	}
+	return t
+}
+
+// restoreProgress positions the reader from a stored locator. Line offsets
+// depend on the rendered line count, which is only known after
+// renderCurrentSection, so a within-chapter fraction is parked in
+// pendingLineFrac and applied there.
+func (a *App) restoreProgress(book *epub.Book, p *epub.Progress) {
+	t := resolveLocator(book, p.Locator, p.SectionIndex, p.LinePos, p.Percent)
+	a.sectionIdx = t.SectionIdx
+	a.scrollPos = t.LinePos
+	a.pendingLineFrac = t.LineFrac
 }
 
 func (a *App) getScreenSize() (int, int) {
@@ -428,28 +450,36 @@ func (a *App) toggleColumns() {
 	a.renderCurrentSection()
 }
 
-func (a *App) saveProgress() {
-	if a.book == nil {
-		return
+// currentPos describes where the reader is in the engine-neutral terms the
+// shared locator needs: chapter href/title, offset within the chapter, and
+// fraction of the whole book.
+func (a *App) currentPos() (href, title string, progression, percent float64) {
+	if a.book == nil || len(a.book.Sections) == 0 {
+		return "", "", 0, 0
 	}
-	total := len(a.lines)
-	pct := 0.0
-	if total > 0 {
-		pct = float64(a.scrollPos) / float64(total)
+	if total := len(a.lines); total > 0 {
+		progression = float64(a.scrollPos) / float64(total)
 	}
-	overallPct := (float64(a.sectionIdx) + pct) / float64(len(a.book.Sections))
-	var href, title string
+	percent = (float64(a.sectionIdx) + progression) / float64(len(a.book.Sections))
 	if a.sectionIdx >= 0 && a.sectionIdx < len(a.book.Sections) {
 		sec := a.book.Sections[a.sectionIdx]
 		href, title = sec.FullHref, sec.Title
 	}
+	return href, title, progression, percent
+}
+
+func (a *App) saveProgress() {
+	if a.book == nil {
+		return
+	}
+	href, title, progression, percent := a.currentPos()
 	a.store.SaveProgress(a.bookPath, epub.Progress{
 		SectionIndex: a.sectionIdx,
 		LinePos:      a.scrollPos,
-		Percent:      overallPct,
+		Percent:      percent,
 		Href:         href,
 		Title:        title,
-		Progression:  pct,
+		Progression:  progression,
 	})
 }
 

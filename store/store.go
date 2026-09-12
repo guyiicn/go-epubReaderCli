@@ -655,7 +655,7 @@ func (s *Store) ApplyRemoteAnnotation(serverBookID string, a AnnotationRecord) e
 	return err
 }
 
-func (s *Store) AddAnnotation(path, selectedText, note string, sectionIndex, linePos int) error {
+func (s *Store) AddAnnotation(path string, a epub.Annotation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	bookID, err := s.bookIDByPath(path)
@@ -663,12 +663,12 @@ func (s *Store) AddAnnotation(path, selectedText, note string, sectionIndex, lin
 		return nil
 	}
 	now := time.Now().UnixMilli()
-	if selectedText == "" {
-		selectedText = "position note"
+	if a.SelectedText == "" {
+		a.SelectedText = "position note"
 	}
 	_, err = s.db.Exec(`INSERT INTO annotations(id, book_id, section_index, line_pos, locator, selected_text, note, color, created_at, created_by, updated_at, dirty)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,1)`,
-		newID(), bookID, sectionIndex, linePos, legacyLocator(sectionIndex, linePos), selectedText, note, "#FFC107", now, s.deviceIDLocked(), now)
+		newID(), bookID, a.SectionIndex, a.LinePos, BuildLocator(a.Href, a.Title, a.Progression, a.Percent), a.SelectedText, a.Note, "#FFC107", now, s.deviceIDLocked(), now)
 	return err
 }
 
@@ -895,7 +895,7 @@ func (s *Store) LoadBookmarks(path string) ([]epub.Bookmark, error) {
 	if err != nil {
 		return nil, nil
 	}
-	rows, err := s.db.Query(`SELECT id, section_index, line_pos, COALESCE(note,''), color, created_at, COALESCE(created_by,''), updated_at, COALESCE(deleted_at,0), dirty
+	rows, err := s.db.Query(`SELECT id, section_index, line_pos, COALESCE(locator,''), COALESCE(note,''), color, created_at, COALESCE(created_by,''), updated_at, COALESCE(deleted_at,0), dirty
 		FROM bookmarks WHERE book_id=? AND deleted_at IS NULL ORDER BY created_at`, bookID)
 	if err != nil {
 		return nil, err
@@ -906,7 +906,7 @@ func (s *Store) LoadBookmarks(path string) ([]epub.Bookmark, error) {
 		var bm epub.Bookmark
 		var createdAt, updatedAt, deletedAt int64
 		var dirty int
-		if err := rows.Scan(&bm.ID, &bm.SectionIndex, &bm.LinePos, &bm.Note, &bm.Color, &createdAt, &bm.CreatedBy, &updatedAt, &deletedAt, &dirty); err != nil {
+		if err := rows.Scan(&bm.ID, &bm.SectionIndex, &bm.LinePos, &bm.Locator, &bm.Note, &bm.Color, &createdAt, &bm.CreatedBy, &updatedAt, &deletedAt, &dirty); err != nil {
 			return nil, err
 		}
 		bm.CreatedAt = millisToTime(createdAt)
@@ -944,6 +944,14 @@ func (s *Store) SaveBookmarks(path string, bm []epub.Bookmark) error {
 		if createdAt.IsZero() {
 			createdAt = time.Now()
 		}
+		// SaveBookmarks replaces every row, but rows loaded from the DB carry
+		// only the raw locator — rebuilding from their empty position fields
+		// would erase a locator another client wrote. Rebuild only when the
+		// caller supplied a freshly captured position.
+		locator := b.Locator
+		if b.Href != "" {
+			locator = BuildLocator(b.Href, b.Title, b.Progression, b.Percent)
+		}
 		_, err = tx.Exec(`INSERT INTO bookmarks(id, book_id, section_index, line_pos, locator, note, color, created_at, created_by, updated_at, dirty)
 			VALUES(?,?,?,?,?,?,?,?,?,?,1)
 			ON CONFLICT(id) DO UPDATE SET
@@ -955,7 +963,7 @@ func (s *Store) SaveBookmarks(path string, bm []epub.Bookmark) error {
 				updated_at=excluded.updated_at,
 				deleted_at=NULL,
 				dirty=1`,
-			b.ID, bookID, b.SectionIndex, b.LinePos, legacyLocator(b.SectionIndex, b.LinePos), b.Note, b.Color, createdAt.UnixMilli(), deviceID, now)
+			b.ID, bookID, b.SectionIndex, b.LinePos, locator, b.Note, b.Color, createdAt.UnixMilli(), deviceID, now)
 		if err != nil {
 			return err
 		}

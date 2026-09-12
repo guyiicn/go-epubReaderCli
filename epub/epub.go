@@ -157,16 +157,37 @@ type Progress struct {
 }
 
 type Bookmark struct {
-	ID           string    `json:"id"`
-	SectionIndex int       `json:"section_index"`
-	LinePos      int       `json:"line_pos"`
-	Note         string    `json:"note"`
-	Color        string    `json:"color,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	CreatedBy    string    `json:"created_by,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
-	DeletedAt    time.Time `json:"deleted_at,omitempty"`
-	Dirty        bool      `json:"dirty,omitempty"`
+	ID           string `json:"id"`
+	SectionIndex int    `json:"section_index"`
+	LinePos      int    `json:"line_pos"`
+	// Href/Title/Progression/Percent describe the position in engine-neutral
+	// terms so the shared locator can be built; Locator carries the raw JSON
+	// as stored, which may have been written by another client.
+	Href        string    `json:"href,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Progression float64   `json:"progression,omitempty"`
+	Percent     float64   `json:"percent,omitempty"`
+	Locator     string    `json:"locator,omitempty"`
+	Note        string    `json:"note"`
+	Color       string    `json:"color,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	CreatedBy   string    `json:"created_by,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	DeletedAt   time.Time `json:"deleted_at,omitempty"`
+	Dirty       bool      `json:"dirty,omitempty"`
+}
+
+// Annotation is a user note anchored to a position in a book. It mirrors
+// Bookmark's engine-neutral fields so both can build the shared locator.
+type Annotation struct {
+	SelectedText string  `json:"selected_text"`
+	Note         string  `json:"note"`
+	SectionIndex int     `json:"section_index"`
+	LinePos      int     `json:"line_pos"`
+	Href         string  `json:"href,omitempty"`
+	Title        string  `json:"title,omitempty"`
+	Progression  float64 `json:"progression,omitempty"`
+	Percent      float64 `json:"percent,omitempty"`
 }
 
 type Config struct {
