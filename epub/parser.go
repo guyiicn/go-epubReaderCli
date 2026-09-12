@@ -23,7 +23,7 @@ func Load(path string) (*Book, error) {
 	case ".epub":
 		return loadEPUB(path)
 	case ".txt", ".md", ".markdown":
-		return loadTextBook(path, strings.TrimPrefix(ext, "."))
+		return loadTextBook(path, strings.TrimPrefix(ext, "."), path)
 	case ".mobi", ".azw3":
 		converted, err := convertToEPUB(path)
 		if err != nil {
@@ -35,7 +35,7 @@ func Load(path string) (*Book, error) {
 		if err != nil {
 			return nil, err
 		}
-		return loadTextBook(converted, "txt")
+		return loadTextBook(converted, "txt", path)
 	default:
 		return nil, fmt.Errorf("unsupported format %s", ext)
 	}
@@ -136,12 +136,15 @@ func loadEPUB(path string) (*Book, error) {
 	return book, nil
 }
 
-func loadTextBook(path, format string) (*Book, error) {
+// displayPath is the file the user actually imported. For converted formats it
+// differs from path, which points at the hash-named cache file — deriving the
+// title from that is how PDFs ended up titled with their content hash.
+func loadTextBook(path, format, displayPath string) (*Book, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read text book: %w", err)
 	}
-	title := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	title := strings.TrimSuffix(filepath.Base(displayPath), filepath.Ext(displayPath))
 	chunks := splitTextSections(string(data))
 	sections := make([]Section, 0, len(chunks))
 	toc := make([]TOCEntry, 0, len(chunks))

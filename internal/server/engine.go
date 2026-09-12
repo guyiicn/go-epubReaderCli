@@ -179,8 +179,10 @@ func (e *Engine) PushBooks(ctx context.Context) (int, error) {
 	for _, row := range rows {
 		format := strings.ToUpper(row.Format)
 		switch format {
-		case "EPUB", "TXT", "MD", "MARKDOWN", "MOBI":
+		case "EPUB", "TXT", "MD", "MARKDOWN", "MOBI", "PDF":
 		default:
+			// Formats the server's books.format CHECK rejects (AZW3, FB2, CBZ).
+			// Skipping keeps them local-only rather than failing the whole sync.
 			continue
 		}
 		if format == "MD" {
