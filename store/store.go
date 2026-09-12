@@ -720,8 +720,12 @@ func (s *Store) AddBook(path, title, author string) error {
 	var existingID string
 	_ = s.db.QueryRow(`SELECT id FROM books WHERE deleted_at IS NULL AND file_path=? LIMIT 1`, path).Scan(&existingID)
 	if existingID != "" {
+		// dirty=1: importing a file is an explicit ask to have this book, and the
+		// server may disagree about it — it can hold a tombstone this client
+		// never learned about. Re-pushing is idempotent, so reconcile rather
+		// than assume the two sides already agree.
 		_, err = s.db.Exec(`UPDATE books SET content_hash=COALESCE(NULLIF(?,''), content_hash), title=?, author=?, format=?, original_format=?,
-			file_size=?, updated_at=?, remote_only=0, deleted_at=NULL, source='local'
+			file_size=?, updated_at=?, remote_only=0, deleted_at=NULL, dirty=1, source='local'
 			WHERE id=?`,
 			nullEmpty(hash), title, author, format, format, size, now, existingID)
 		if err != nil {
