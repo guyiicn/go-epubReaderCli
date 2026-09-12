@@ -763,6 +763,16 @@ func (s *Store) UpsertRemoteBook(serverID, title, author, format, contentHash st
 	_, err := s.db.Exec(`INSERT INTO books(id, server_id, content_hash, title, author, format, original_format, total_chapters,
 		added_at, updated_at, deleted_at, remote_only, dirty, readable_format, source)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'server')
+		ON CONFLICT(server_id) DO UPDATE SET
+			content_hash=COALESCE(excluded.content_hash, books.content_hash),
+			title=excluded.title,
+			author=excluded.author,
+			format=excluded.format,
+			original_format=excluded.original_format,
+			total_chapters=excluded.total_chapters,
+			updated_at=excluded.updated_at,
+			deleted_at=excluded.deleted_at,
+			remote_only=CASE WHEN books.file_path IS NULL OR books.file_path='' THEN 1 ELSE 0 END
 		ON CONFLICT(id) DO UPDATE SET
 			server_id=excluded.server_id,
 			content_hash=COALESCE(excluded.content_hash, books.content_hash),

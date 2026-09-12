@@ -206,6 +206,21 @@ library ──?────→ help
 - `bookmarks/<hash>.json` — 书签
 - hash = SHA256(文件路径)[:16]
 
+## 同步（Sync）
+
+`books` 表有两个独立的键：
+- `id`（本地主键）—— 本地新增的书在推送前用本地生成的 UUID
+- `server_id`（UNIQUE）—— 推送成功后由 `MarkPushed` 写入，`id` 本身不变
+
+也就是说，一本先在本地添加、后同步到服务器的书，`id != server_id` 是正常状态。
+
+`UpsertRemoteBook`（拉取服务器书库列表时调用）必须能匹配到这类行，否则会在
+`INSERT ... ON CONFLICT(id) DO UPDATE` 时撞上 `server_id` 的 UNIQUE 约束而报
+`UNIQUE constraint failed: books.server_id`（每次 `sync` 必现，只要库里有一本
+先本地后推送的书）。修复方式是用 SQLite 3.35+ 支持的多重 `ON CONFLICT`：先按
+`ON CONFLICT(server_id)` 匹配已存在的本地行（保留其 `id`），匹配不到再退回
+`ON CONFLICT(id)`。
+
 ## 阅读进度
 
 - 每次翻页自动保存 `{SectionIndex, LinePos, Percent}`
