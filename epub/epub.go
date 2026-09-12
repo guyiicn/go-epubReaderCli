@@ -16,12 +16,15 @@ type Book struct {
 
 // Section is a single chapter/section of an EPUB.
 type Section struct {
-	ID    string
-	Href  string
-	Title string
-	Index int
-	HTML  string
-	CSS   string
+	ID   string
+	Href string // raw manifest-relative href; TOC matching keys off this
+	// FullHref is the publication-root-relative, URL-decoded form with a
+	// leading slash — the shape the cross-client locator spec mandates.
+	FullHref string
+	Title    string
+	Index    int
+	HTML     string
+	CSS      string
 }
 
 // TOCEntry is a table-of-contents entry.
@@ -139,12 +142,18 @@ type LibraryEntry struct {
 }
 
 type Progress struct {
-	SectionIndex int       `json:"section_index"`
-	LinePos      int       `json:"line_pos"`
-	Percent      float64   `json:"percent"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	UpdatedBy    string    `json:"updated_by,omitempty"`
-	Dirty        bool      `json:"dirty,omitempty"`
+	SectionIndex int     `json:"section_index"`
+	LinePos      int     `json:"line_pos"`
+	Percent      float64 `json:"percent"`
+	// Href/Title/Progression describe the position in engine-neutral terms so
+	// the shared locator can be built; Locator carries the raw JSON as stored.
+	Href        string    `json:"href,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Progression float64   `json:"progression,omitempty"`
+	Locator     string    `json:"locator,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	UpdatedBy   string    `json:"updated_by,omitempty"`
+	Dirty       bool      `json:"dirty,omitempty"`
 }
 
 type Bookmark struct {

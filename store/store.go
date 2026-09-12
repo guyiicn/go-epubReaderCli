@@ -546,7 +546,10 @@ func (s *Store) ApplyRemoteProgress(serverBookID, locator string, totalProgressi
 	if err != nil {
 		return nil
 	}
-	sectionIdx, linePos := parseLocator(locator)
+	// Only the legacy shape carries a section index; richer locators are
+	// resolved against the book's spine when it is opened.
+	parsed := ParseLocator(locator)
+	sectionIdx, linePos := parsed.SectionIndex, parsed.LinePos
 	_, err = s.db.Exec(`INSERT INTO progress(book_id, section_index, line_pos, locator, total_progression, updated_at, updated_by, dirty)
 		VALUES(?,?,?,?,?,?,?,0)
 		ON CONFLICT(book_id) DO UPDATE SET
@@ -627,7 +630,8 @@ func (s *Store) ApplyRemoteAnnotation(serverBookID string, a AnnotationRecord) e
 	if err != nil {
 		return nil
 	}
-	sectionIdx, linePos := parseLocator(a.Locator)
+	parsed := ParseLocator(a.Locator)
+	sectionIdx, linePos := parsed.SectionIndex, parsed.LinePos
 	if a.Color == "" {
 		a.Color = "#FFC107"
 	}
@@ -664,7 +668,7 @@ func (s *Store) AddAnnotation(path, selectedText, note string, sectionIndex, lin
 	}
 	_, err = s.db.Exec(`INSERT INTO annotations(id, book_id, section_index, line_pos, locator, selected_text, note, color, created_at, created_by, updated_at, dirty)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,1)`,
-		newID(), bookID, sectionIndex, linePos, locator(sectionIndex, linePos), selectedText, note, "#FFC107", now, s.deviceIDLocked(), now)
+		newID(), bookID, sectionIndex, linePos, legacyLocator(sectionIndex, linePos), selectedText, note, "#FFC107", now, s.deviceIDLocked(), now)
 	return err
 }
 
@@ -675,7 +679,8 @@ func (s *Store) ApplyRemoteBookmark(serverBookID string, b BookmarkRecord) error
 	if err != nil {
 		return nil
 	}
-	sectionIdx, linePos := parseLocator(b.Locator)
+	parsed := ParseLocator(b.Locator)
+	sectionIdx, linePos := parsed.SectionIndex, parsed.LinePos
 	if b.Color == "" {
 		b.Color = "#FFC107"
 	}
@@ -845,8 +850,8 @@ func (s *Store) LoadProgress(path string) (*epub.Progress, error) {
 	var p epub.Progress
 	var updatedAt int64
 	var dirty int
-	err = s.db.QueryRow(`SELECT section_index, line_pos, total_progression, updated_at, COALESCE(updated_by,''), dirty FROM progress WHERE book_id=?`, bookID).
-		Scan(&p.SectionIndex, &p.LinePos, &p.Percent, &updatedAt, &p.UpdatedBy, &dirty)
+	err = s.db.QueryRow(`SELECT section_index, line_pos, total_progression, COALESCE(locator,''), updated_at, COALESCE(updated_by,''), dirty FROM progress WHERE book_id=?`, bookID).
+		Scan(&p.SectionIndex, &p.LinePos, &p.Percent, &p.Locator, &updatedAt, &p.UpdatedBy, &dirty)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -867,7 +872,7 @@ func (s *Store) SaveProgress(path string, p epub.Progress) error {
 		return nil
 	}
 	now := time.Now().UnixMilli()
-	locator := locator(p.SectionIndex, p.LinePos)
+	locator := BuildLocator(p.Href, p.Title, p.Progression, p.Percent)
 	_, err = s.db.Exec(`INSERT INTO progress(book_id, section_index, line_pos, locator, total_progression, updated_at, updated_by, dirty)
 		VALUES(?,?,?,?,?,?,?,1)
 		ON CONFLICT(book_id) DO UPDATE SET
@@ -950,7 +955,7 @@ func (s *Store) SaveBookmarks(path string, bm []epub.Bookmark) error {
 				updated_at=excluded.updated_at,
 				deleted_at=NULL,
 				dirty=1`,
-			b.ID, bookID, b.SectionIndex, b.LinePos, locator(b.SectionIndex, b.LinePos), b.Note, b.Color, createdAt.UnixMilli(), deviceID, now)
+			b.ID, bookID, b.SectionIndex, b.LinePos, legacyLocator(b.SectionIndex, b.LinePos), b.Note, b.Color, createdAt.UnixMilli(), deviceID, now)
 		if err != nil {
 			return err
 		}
@@ -1213,21 +1218,6 @@ func newID() string {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-}
-
-func locator(sectionIndex, linePos int) string {
-	return fmt.Sprintf(`{"sectionIndex":%d,"linePos":%d}`, sectionIndex, linePos)
-}
-
-func parseLocator(s string) (int, int) {
-	var v struct {
-		SectionIndex int `json:"sectionIndex"`
-		LinePos      int `json:"linePos"`
-	}
-	if json.Unmarshal([]byte(s), &v) == nil {
-		return v.SectionIndex, v.LinePos
-	}
-	return 0, 0
 }
 
 func legacyBookHash(path string) string {

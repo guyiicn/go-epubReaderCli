@@ -64,6 +64,9 @@ func loadEPUB(path string) (*Book, error) {
 	}
 	opfPath := container.Rootfiles.Rootfile[0].FullPath
 	baseDir := filepath.Dir(opfPath)
+	// EPUB-internal paths are always forward-slashed; filepath.Dir would yield
+	// backslashes on Windows and corrupt the locators we publish.
+	opfDir := OPFDir(opfPath)
 
 	// 2. Parse OPF
 	opfFile := findFileInZip(r.File, opfPath)
@@ -115,10 +118,11 @@ func loadEPUB(path string) (*Book, error) {
 		}
 
 		book.Sections = append(book.Sections, Section{
-			ID:    ref.IDRef,
-			Href:  item.Href,
-			Index: i,
-			HTML:  string(data),
+			ID:       ref.IDRef,
+			Href:     item.Href,
+			FullHref: CanonicalHref(opfDir, item.Href),
+			Index:    i,
+			HTML:     string(data),
 		})
 	}
 
@@ -144,17 +148,19 @@ func loadTextBook(path, format string) (*Book, error) {
 	for i, chunk := range chunks {
 		sectionTitle := fmt.Sprintf("Part %d", i+1)
 		htmlText := textToHTML(chunk)
+		href := fmt.Sprintf("s%d.%s", i, format)
 		sections = append(sections, Section{
-			ID:    fmt.Sprintf("s%d", i),
-			Href:  fmt.Sprintf("s%d.%s", i, format),
-			Title: sectionTitle,
-			Index: i,
-			HTML:  htmlText,
+			ID:       fmt.Sprintf("s%d", i),
+			Href:     href,
+			FullHref: CanonicalHref("", href),
+			Title:    sectionTitle,
+			Index:    i,
+			HTML:     htmlText,
 		})
 		toc = append(toc, TOCEntry{Title: sectionTitle, SectionID: sections[i].Href, SectionIndex: i})
 	}
 	if len(sections) == 0 {
-		sections = []Section{{ID: "s0", Href: "s0.txt", Title: "Text", HTML: ""}}
+		sections = []Section{{ID: "s0", Href: "s0.txt", FullHref: "/s0.txt", Title: "Text", HTML: ""}}
 	}
 	return &Book{
 		Title:    title,

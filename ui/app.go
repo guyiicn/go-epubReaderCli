@@ -99,6 +99,10 @@ type App struct {
 	colWidth   int
 	columns    int
 
+	// pendingLineFrac parks a within-chapter offset until the chapter is
+	// rendered and its line count is known; -1 means nothing pending.
+	pendingLineFrac float64
+
 	// Cache
 	cachedSection int
 	cachedWidth   int
@@ -119,11 +123,12 @@ type App struct {
 // NewApp creates the application.
 func NewApp(s *store.Store) *App {
 	a := &App{
-		tapp:     tview.NewApplication(),
-		store:    s,
-		renderer: render.NewRenderer(),
-		config:   s.Config(),
-		library:  s.Library(),
+		tapp:            tview.NewApplication(),
+		store:           s,
+		renderer:        render.NewRenderer(),
+		config:          s.Config(),
+		library:         s.Library(),
+		pendingLineFrac: -1,
 	}
 
 	a.setupUI()

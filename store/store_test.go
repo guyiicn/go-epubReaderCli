@@ -38,7 +38,10 @@ func TestStoreAddProgressAndBookmark(t *testing.T) {
 	if got := st.Library(); len(got) != 1 || got[0].Title != "Book" {
 		t.Fatalf("Library = %#v", got)
 	}
-	if err := st.SaveProgress(bookPath, epub.Progress{SectionIndex: 2, LinePos: 30, Percent: 0.5}); err != nil {
+	if err := st.SaveProgress(bookPath, epub.Progress{
+		SectionIndex: 2, LinePos: 30, Percent: 0.5,
+		Href: "/OEBPS/Text/part0003.xhtml", Title: "Ch 3", Progression: 0.75,
+	}); err != nil {
 		t.Fatalf("SaveProgress: %v", err)
 	}
 	p, err := st.LoadProgress(bookPath)
@@ -47,6 +50,12 @@ func TestStoreAddProgressAndBookmark(t *testing.T) {
 	}
 	if p == nil || p.SectionIndex != 2 || p.LinePos != 30 || p.Percent != 0.5 || !p.Dirty {
 		t.Fatalf("progress = %#v", p)
+	}
+	// The stored locator must come back in the shared cross-client shape.
+	loc := ParseLocator(p.Locator)
+	if loc.Href != "/OEBPS/Text/part0003.xhtml" || loc.Title != "Ch 3" ||
+		loc.Progression != 0.75 || loc.TotalProgression != 0.5 {
+		t.Fatalf("locator = %#v (raw %s)", loc, p.Locator)
 	}
 	bm := []epub.Bookmark{{ID: "11111111-1111-4111-8111-111111111111", SectionIndex: 2, LinePos: 30, Note: "note"}}
 	if err := st.SaveBookmarks(bookPath, bm); err != nil {
