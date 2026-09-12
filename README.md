@@ -11,6 +11,8 @@ A terminal EpubReader client written in Go. Works in any terminal, supports loca
 - **Dual-column layout** — auto-enable on wide terminals (≥120 cols), toggle with `c`
 - **SQLite library** — local/remote/dirty state, migrated from the old JSON layout
 - **Server sync** — auth, device registration, books, progress, bookmarks, annotations, find-book, and WebSocket invalidate client
+- **Cross-client positions** — reading position, bookmarks and annotations travel in the shared Readium locator format, so a position set here resolves on Android and web too (see [contracts/LOCATOR.md](https://github.com/guyiicn/epub-reader/blob/main/contracts/LOCATOR.md))
+- **Uploads EPUB / TXT / MD / MOBI / PDF** — AZW3, FB2 and CBZ stay local-only; the server's `books.format` does not accept them
 - **Library management** — add/remove books, remote metadata, reading progress with percentage bar
 - **Auto progress save** — remembers your position, resumes on next open
 - **Bookmarks** — add/delete/list/jump
