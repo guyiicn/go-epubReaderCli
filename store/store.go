@@ -513,10 +513,10 @@ func (s *Store) SaveCursor(table string, cursor int64) error {
 func (s *Store) DirtyProgress() ([]ProgressRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.Query(`SELECT p.book_id, COALESCE(b.server_id,b.id), p.locator, p.section_index, p.line_pos,
+	rows, err := s.db.Query(`SELECT p.book_id, b.server_id, p.locator, p.section_index, p.line_pos,
 		p.total_progression, p.updated_at, COALESCE(p.updated_by,'')
 		FROM progress p JOIN books b ON b.id=p.book_id
-		WHERE p.dirty=1 AND COALESCE(b.server_id,b.id) != '' AND b.deleted_at IS NULL`)
+		WHERE p.dirty=1 AND b.server_id IS NOT NULL AND b.server_id != '' AND b.deleted_at IS NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -565,10 +565,10 @@ func (s *Store) ApplyRemoteProgress(serverBookID, locator string, totalProgressi
 func (s *Store) DirtyBookmarks() ([]BookmarkRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.Query(`SELECT bm.id, bm.book_id, COALESCE(b.server_id,b.id), bm.locator, bm.section_index, bm.line_pos,
+	rows, err := s.db.Query(`SELECT bm.id, bm.book_id, b.server_id, bm.locator, bm.section_index, bm.line_pos,
 		COALESCE(bm.note,''), bm.color, bm.created_at, COALESCE(bm.created_by,''), bm.updated_at, COALESCE(bm.deleted_at,0)
 		FROM bookmarks bm JOIN books b ON b.id=bm.book_id
-		WHERE bm.dirty=1 AND COALESCE(b.server_id,b.id) != ''`)
+		WHERE bm.dirty=1 AND b.server_id IS NOT NULL AND b.server_id != ''`)
 	if err != nil {
 		return nil, err
 	}
@@ -594,10 +594,10 @@ func (s *Store) MarkBookmarkSynced(id string) error {
 func (s *Store) DirtyAnnotations() ([]AnnotationRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.Query(`SELECT an.id, an.book_id, COALESCE(b.server_id,b.id), an.locator, an.section_index, an.line_pos,
+	rows, err := s.db.Query(`SELECT an.id, an.book_id, b.server_id, an.locator, an.section_index, an.line_pos,
 		an.selected_text, COALESCE(an.note,''), an.color, an.created_at, COALESCE(an.created_by,''), an.updated_at, COALESCE(an.deleted_at,0)
 		FROM annotations an JOIN books b ON b.id=an.book_id
-		WHERE an.dirty=1 AND COALESCE(b.server_id,b.id) != ''`)
+		WHERE an.dirty=1 AND b.server_id IS NOT NULL AND b.server_id != ''`)
 	if err != nil {
 		return nil, err
 	}
